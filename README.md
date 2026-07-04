@@ -1,10 +1,10 @@
-# APEX: APAC Compute Exchange 🚀
+# APEX: APAC Compute Exchange 
 
 APEX is a decentralized, cash-settled compute futures exchange developed for the **APAC Stellar Hackathon (DeFi & Liquidity Track)**. It utilizes a **Virtual Automated Market Maker (vAMM)** model to enable leverage-based trading of virtual GPU/compute hours, settling exclusively in USDC via the Stellar Asset Contract (SAC).
 
 ---
 
-## 🌟 Key Features
+## Key Features
 
 1. **Compute Power Futures**: Buy/sell virtual base compute units (representing GPU hours, e.g. H100 GPU compute indexes) on leverage.
 2. **Virtual Automated Market Maker (vAMM)**: Zero-liquidity-provider requirement. Trade virtual compute contracts directly against a constant product ($x \cdot y = k$) virtual price discovery model.
@@ -14,7 +14,7 @@ APEX is a decentralized, cash-settled compute futures exchange developed for the
 
 ---
 
-## 📁 Repository Structure
+## Repository Structure
 
 ```
 apex-compute-exchange/
@@ -50,7 +50,7 @@ apex-compute-exchange/
 
 ---
 
-## ⚙️ Setup & Deployment Instructions
+## Setup & Deployment Instructions
 
 ### 1. Smart Contract Deployment (Local & Testnet)
 
@@ -116,7 +116,7 @@ stellar contract deploy \
 
 ---
 
-## 📸 Hackathon Demonstration Deliverables
+## Hackathon Demonstration Deliverables
 
 Below are placeholders for the four required screenshots illustrating the successful integration and execution of user actions:
 
