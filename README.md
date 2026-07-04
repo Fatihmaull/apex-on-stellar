@@ -1,118 +1,141 @@
-# Stellar Notes DApp
+# APEX: APAC Compute Exchange 🚀
 
-**Stellar Notes DApp** - Blockchain-Based Decentralized Note-Taking System
-
-## Project Description
-
-Stellar Notes DApp is a decentralized smart contract solution built on the Stellar blockchain using Soroban SDK. It provides a secure, immutable platform for managing personal notes directly on the blockchain. The contract ensures that your data is stored transparently and is only manageable through predefined smart contract functions, eliminating reliance on centralized database providers.
-
-The system allows users to create, view, and delete notes, leveraging the efficiency and security of the Stellar network. Each note is uniquely identified and stored within the contract's instance storage, ensuring data persistence and reliability.
-
-## Project Vision
-
-Our vision is to revolutionize personal productivity in the digital age by:
-
-- **Decentralizing Data**: Moving note-taking from centralized servers to a global, distributed blockchain
-- **Ensuring Ownership**: Empowering users to have complete control and ownership over their digital thoughts and information
-- **Guaranteeing Immutability**: Providing a permanent, tamper-proof record of notes that cannot be altered or deleted by third parties
-- **Enhancing Privacy**: Leveraging blockchain security to protect personal information from unauthorized access
-- **Building Trustless Systems**: Creating a platform where data integrity is guaranteed by code, not by company promises
-
-We envision a future where digital information is truly personal and sovereign, empowering individuals with complete autonomy over their digital assets.
-
-## Key Features
-
-### 1. **Simple Note Creation**
-
-- Create notes with just one function call
-- Specify title and content for each note
-- Automated ID generation for unique identification
-- Persistent storage on the Stellar blockchain
-
-### 2. **Efficient Data Retrieval**
-
-- Fetch all stored notes in a single call
-- Structured data representation for easy frontend integration
-- Quick access to your entire note collection
-- Real-time synchronization with the blockchain state
-
-### 3. **Secure Deletion**
-
-- Remove specific notes using their unique IDs
-- Permanent removal from the contract storage
-- Clean and efficient storage management
-- Immediate update of the note list after deletion
-
-### 4. **Transparency and Security**
-
-- View all note activities on the blockchain
-- Blockchain-based verification of all storage actions
-- Immutable records of note creation and deletion
-- Protected against unauthorized modifications
-
-### 5. **Stellar Network Integration**
-
-- Leverages the high speed and low cost of Stellar
-- Built using the modern Soroban Smart Contract SDK
-- Scalable architecture for growing note collections
-- Interoperable with other Stellar-based services
-
-## Contract Details
-
-- Contract Address: CBLU4IUASQ4WUMOXBFLZRSBBLILGOH33GS4LUPKFBCCCMJCDQNMF7G2M
-  (Screenshot has been removed)
-
-## Future Scope
-
-### Short-Term Enhancements
-
-1. **Note Encryption**: Support for end-to-end encryption of note content for enhanced privacy
-2. **Category Management**: Add tags and categories to organize notes efficiently
-3. **Rich Text Support**: Extend support beyond plain text to include Markdown and formatted content
-4. **Search Functionality**: Implement advanced search filters for large note collections
-
-### Medium-Term Development
-
-5. **Collaborative Notes**: Implement multi-signature requirements for shared or collaborative note-taking
-   - Shared access for multiple addresses
-   - Permission-based editing and viewing
-   - Version history tracking
-6. **Notification System**: Off-chain bridge to alert users of new updates or shared notes
-7. **Asset Attachment**: Capability to attach digital assets or tokens to specific notes
-8. **Inter-Contract Integration**: Allow other smart contracts to interact with and store data in the notes contract
-
-### Long-Term Vision
-
-9. **Cross-Chain Synchronization**: Extend note storage to multiple blockchain networks
-10. **Decentralized UI Hosting**: Host the frontend on IPFS or similar decentralized platforms
-11. **AI-Powered Summarization**: Optional integration with AI to help users summarize their notes
-12. **Privacy Layers**: Implement zero-knowledge proofs for completely private note content
-13. **DAO Governance**: Community-driven protocol improvements and feature prioritization
-14. **Identity Management**: Integration with decentralized identity (DID) systems for user management
-
-### Enterprise Features
-
-15. **Corporate Documentation**: Adapt the system for secure corporate record-keeping
-16. **Immutable Logging**: Create time-locked logs for audit purposes
-17. **Automated Reporting**: Automatic note triggers for periodic reporting
-18. **Multi-Language Support**: Expand accessibility with internationalization
+APEX is a decentralized, cash-settled compute futures exchange developed for the **APAC Stellar Hackathon (DeFi & Liquidity Track)**. It utilizes a **Virtual Automated Market Maker (vAMM)** model to enable leverage-based trading of virtual GPU/compute hours, settling exclusively in USDC via the Stellar Asset Contract (SAC).
 
 ---
 
-## Technical Requirements
+## 🌟 Key Features
 
-- Soroban SDK
-- Rust programming language
-- Stellar blockchain network
-
-## Getting Started
-
-Deploy the smart contract to Stellar's Soroban network and interact with it using the three main functions:
-
-- `create_note()` - Create a new note with a title and content
-- `get_notes()` - Retrieve all stored notes from the contract
-- `delete_note()` - Remove a specific note by its ID
+1. **Compute Power Futures**: Buy/sell virtual base compute units (representing GPU hours, e.g. H100 GPU compute indexes) on leverage.
+2. **Virtual Automated Market Maker (vAMM)**: Zero-liquidity-provider requirement. Trade virtual compute contracts directly against a constant product ($x \cdot y = k$) virtual price discovery model.
+3. **Cash Settlement in USDC**: Positions are funded, collateralized, and settled exclusively using USDC through the Soroban token interface (SAC).
+4. **Decentralized Oracles**: Authorized index administrators feed verified GPU spot index prices (e.g. from GRC networks) to compute futures mark prices.
+5. **Robust Liquidation System**: Liquidators can close underwater positions (health factor < 1.0) and receive a 5% liquidation bounty from the slashed margin.
 
 ---
 
-**Stellar Notes DApp** - Securing Your Thoughts on the Blockchain
+## 📁 Repository Structure
+
+```
+apex-compute-exchange/
+├── README.md                  # This file
+├── .gitignore                 # Root gitignore
+├── contracts/                 # Soroban Smart Contracts (Rust)
+│   ├── Cargo.toml             # Rust package configuration
+│   └── src/
+│       ├── lib.rs             # Contract entry point & public dispatch
+│       ├── storage.rs         # Soroban storage abstractions
+│       ├── margin.rs          # Margin account & health factor calculations
+│       ├── vamm.rs            # Virtual AMM pricing and trading math
+│       ├── oracle.rs          # Permissioned index feed
+│       └── liquidation.rs     # Slashing logic
+└── frontend/                  # Next.js Web Dashboard
+    ├── package.json           # Frontend dependencies
+    ├── next.config.js         # Next.js bundler settings
+    └── src/
+        ├── app/
+        │   ├── page.tsx       # Main trading layout & dashboard view
+        │   ├── layout.tsx     # Custom global font & HTML head wrapper
+        │   └── globals.css    # Premium CSS design system (neon dark mode)
+        ├── components/
+        │   ├── WalletConnect.tsx    # Freighter connection button & active state
+        │   ├── BalanceDisplay.tsx   # XLM / USDC balance display fetches
+        │   ├── TradeForm.tsx        # Multi-leverage long/short order entry
+        │   └── TransactionResult.tsx # StellarExpert receipt lookup & status messages
+        ├── hooks/
+        │   └── useSoroban.ts  # Wallet interface & smart contract hook
+        └── lib/
+            └── stellar.ts     # Stellar SDK transaction wrapper
+```
+
+---
+
+## ⚙️ Setup & Deployment Instructions
+
+### 1. Smart Contract Deployment (Local & Testnet)
+
+#### Prerequisites
+- Rust, Cargo, and `wasm32-unknown-unknown` target.
+- Stellar CLI installed.
+
+#### Local Development
+1. **Build contracts**:
+   ```bash
+   cd contracts
+   cargo build --target wasm32-unknown-unknown --release
+   ```
+2. **Run Local Sandbox Network**:
+   ```bash
+   stellar network add --global local \
+     --rpc-url "http://localhost:8000/soroban/rpc" \
+     --network-passphrase "Local Sandbox Stellar Network ; September 2022"
+   
+   stellar-sandbox --port 8000
+   ```
+3. **Deploy Contract**:
+   ```bash
+   stellar contract deploy \
+     --wasm target/wasm32-unknown-unknown/release/apex_futures.wasm \
+     --source admin \
+     --network local
+   ```
+
+#### Testnet Setup
+To deploy on Stellar Testnet:
+```bash
+stellar contract deploy \
+  --wasm target/wasm32-unknown-unknown/release/apex_futures.wasm \
+  --source your_funded_testnet_account \
+  --network testnet
+```
+
+---
+
+### 2. Frontend Development
+
+#### Prerequisites
+- Node.js (v18+)
+- Freighter Wallet installed as a browser extension (configured to **Testnet**).
+
+#### Installation
+1. Go to the frontend directory:
+   ```bash
+   cd frontend
+   npm install
+   ```
+2. Create or configure a `.env.local` to point to the deployed contract address:
+   ```env
+   NEXT_PUBLIC_CONTRACT_ID="CAC_YOUR_DEPLOYED_CONTRACT_ID"
+   NEXT_PUBLIC_USDC_ASSET_ID="CBG_TESTNET_USDC_SAC_ADDRESS"
+   ```
+3. Start the Next.js development server:
+   ```bash
+   npm run dev
+   ```
+4. Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+---
+
+## 📸 Hackathon Demonstration Deliverables
+
+Below are placeholders for the four required screenshots illustrating the successful integration and execution of user actions:
+
+### 1. Wallet Connected State
+*Screenshot demonstrating Freighter connection status, displaying the connected account's public key.*
+<!-- [Wallet connected state] -->
+![Wallet Connected State](./docs/screenshots/wallet_connected.png)
+
+### 2. Balance Displayed
+*Screenshot showing the user's active XLM balance and testnet USDC balance fetched via Horizon.*
+<!-- [Balance displayed] -->
+![Balance Displayed](./docs/screenshots/balance_displayed.png)
+
+### 3. Successful Testnet Transaction
+*Screenshot of the user signing and submitting a margin deposit / trade order on Stellar Testnet.*
+<!-- [Successful testnet transaction] -->
+![Successful Testnet Transaction](./docs/screenshots/successful_transaction.png)
+
+### 4. Transaction Result Shown to User
+*Screenshot of the transaction receipt showing the success status, transaction hash, and explorer link.*
+<!-- [Transaction result shown to user] -->
+![Transaction Result Shown to User](./docs/screenshots/transaction_result.png)
