@@ -1,11 +1,11 @@
 [package]
-name = "notes"
-version = "0.0.0"
+name = "apex-futures"
+version = "0.1.0"
 edition = "2021"
 publish = false
 
 [lib]
-crate-type = ["lib", "cdylib"]
+crate-type = ["cdylib", "rlib"]
 doctest = false
 
 [dependencies]
@@ -13,3 +13,5 @@ soroban-sdk = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
+
+# Release profiles are inherited from the workspace root Cargo.toml.
