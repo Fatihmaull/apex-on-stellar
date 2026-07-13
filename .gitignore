@@ -1,6 +1,5 @@
 # Rust
-/contracts/target/
-Cargo.lock
+/target/
 
 # Node / Next.js
 /frontend/node_modules/
