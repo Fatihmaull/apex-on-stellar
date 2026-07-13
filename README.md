@@ -155,13 +155,15 @@ endpoint for production.
 
 | Area | State |
 |---|---|
-| Contract (security, funding, fees, solvency) | Hardened, 25 tests green, builds to ~28 KB WASM |
+| Contract (security, funding, fees, solvency) | Hardened, 25 unit + 1 property/fuzz test green, ~28 KB WASM |
+| Property-based fuzzing (solvency invariants) | `proptest` harness in `contracts/apex-futures/src/fuzz.rs` |
 | Frontend (design system, multi-wallet, trade UI) | Complete; `tsc` + `next build` green |
 | Repo | Consolidated — single source of truth |
 | Testnet deploy + e2e | Next up |
 | External audit, multisig governance, monitoring | Roadmap (pre-mainnet) |
 
-See [`contracts/DEPLOYMENT.md`](contracts/DEPLOYMENT.md) for the mainnet-readiness
+See [`SECURITY.md`](SECURITY.md) for the threat model and pre-audit scope, and
+[`contracts/DEPLOYMENT.md`](contracts/DEPLOYMENT.md) for the mainnet-readiness
 checklist.
 
 ---
