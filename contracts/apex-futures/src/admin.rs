@@ -2,7 +2,7 @@ use soroban_sdk::{panic_with_error, Address, BytesN, Env};
 
 use crate::errors::Error;
 use crate::events;
-use crate::storage::{self, Config, BPS_DENOM};
+use crate::storage::{self, Config, PendingConfig, PendingUpgrade, BPS_DENOM};
 
 // --- Authorization guards --------------------------------------------------
 
@@ -124,21 +124,97 @@ pub fn validate_config(env: &Env, cfg: &Config) {
     }
 }
 
-pub fn set_config(env: &Env, caller: &Address, cfg: &Config) {
+// Parameter changes and code upgrades are the two highest-impact admin powers,
+// so both run through a two-phase **timelock**: an admin first *proposes* the
+// change, and it can only be *executed* after `timelock_delay` seconds. This
+// gives users a guaranteed window to exit before a governance action takes
+// effect (defence against a compromised/rogue admin key), while `cancel` lets a
+// legitimate admin abort a mistaken or malicious-looking proposal.
+
+/// Queue a config change. Validated up-front so bad params fail fast.
+pub fn propose_config(env: &Env, caller: &Address, cfg: &Config) {
     require_admin(env, caller);
     validate_config(env, cfg);
-    storage::set_config(env, cfg);
+    let eta = env.ledger().timestamp() + storage::get_timelock_delay(env);
+    storage::set_pending_config(
+        env,
+        &PendingConfig {
+            config: cfg.clone(),
+            eta,
+        },
+    );
+    storage::extend_instance(env);
+    events::config_proposed(env, caller, eta);
+}
+
+/// Apply a previously-queued config change once its timelock has elapsed.
+pub fn execute_config(env: &Env, caller: &Address) {
+    require_admin(env, caller);
+    let pending = match storage::get_pending_config(env) {
+        Some(p) => p,
+        None => panic_with_error!(env, Error::NothingPending),
+    };
+    if env.ledger().timestamp() < pending.eta {
+        panic_with_error!(env, Error::TimelockNotReady);
+    }
+    // Re-validate defensively in case bounds changed since the proposal.
+    validate_config(env, &pending.config);
+    storage::set_config(env, &pending.config);
+    storage::clear_pending_config(env);
     storage::extend_instance(env);
     events::config_updated(env, caller);
 }
 
-// --- Upgradeability --------------------------------------------------------
-// Admin-controlled WASM swap. In production the admin should be a multisig /
-// governance address (see deployment checklist). The event provides an audit
-// trail of every code change.
-
-pub fn upgrade(env: &Env, caller: &Address, new_wasm_hash: BytesN<32>) {
+pub fn cancel_config(env: &Env, caller: &Address) {
     require_admin(env, caller);
-    env.deployer().update_current_contract_wasm(new_wasm_hash);
+    if storage::get_pending_config(env).is_none() {
+        panic_with_error!(env, Error::NothingPending);
+    }
+    storage::clear_pending_config(env);
+    storage::extend_instance(env);
+    events::gov_cancelled(env, caller);
+}
+
+// --- Upgradeability (timelocked) -------------------------------------------
+// Admin-controlled WASM swap behind the same timelock. In production the admin
+// should additionally be a multisig / governance address (see deployment
+// checklist). Events provide a full audit trail of every proposed/executed change.
+
+pub fn propose_upgrade(env: &Env, caller: &Address, new_wasm_hash: BytesN<32>) {
+    require_admin(env, caller);
+    let eta = env.ledger().timestamp() + storage::get_timelock_delay(env);
+    storage::set_pending_upgrade(
+        env,
+        &PendingUpgrade {
+            wasm_hash: new_wasm_hash,
+            eta,
+        },
+    );
+    storage::extend_instance(env);
+    events::upgrade_proposed(env, caller, eta);
+}
+
+pub fn execute_upgrade(env: &Env, caller: &Address) {
+    require_admin(env, caller);
+    let pending = match storage::get_pending_upgrade(env) {
+        Some(p) => p,
+        None => panic_with_error!(env, Error::NothingPending),
+    };
+    if env.ledger().timestamp() < pending.eta {
+        panic_with_error!(env, Error::TimelockNotReady);
+    }
+    env.deployer()
+        .update_current_contract_wasm(pending.wasm_hash);
+    storage::clear_pending_upgrade(env);
     events::upgraded(env, caller);
+}
+
+pub fn cancel_upgrade(env: &Env, caller: &Address) {
+    require_admin(env, caller);
+    if storage::get_pending_upgrade(env).is_none() {
+        panic_with_error!(env, Error::NothingPending);
+    }
+    storage::clear_pending_upgrade(env);
+    storage::extend_instance(env);
+    events::gov_cancelled(env, caller);
 }

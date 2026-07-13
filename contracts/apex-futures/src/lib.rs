@@ -71,6 +71,9 @@ impl ApexFuturesContract {
     /// - `usdc`: USDC SAC address used for all settlement.
     /// - `init_base`/`init_quote`: initial virtual reserves (7 dp).
     /// - `config`: risk, fee and oracle parameters.
+    /// - `timelock_delay`: seconds an `upgrade`/`config` change must wait between
+    ///   proposal and execution. Set to a governance-appropriate value on mainnet
+    ///   (e.g. 24–48h); may be 0 on testnet for demos.
     pub fn __constructor(
         env: Env,
         admin: Address,
@@ -81,6 +84,7 @@ impl ApexFuturesContract {
         init_base: i128,
         init_quote: i128,
         config: Config,
+        timelock_delay: u64,
     ) {
         if storage::is_initialized(&env) {
             panic_err(&env, Error::AlreadyInitialized);
@@ -96,6 +100,7 @@ impl ApexFuturesContract {
         storage::set_usdc_token(&env, &usdc);
         storage::set_oracle_updater(&env, &oracle_updater);
         storage::set_config(&env, &config);
+        storage::set_timelock_delay(&env, timelock_delay);
         storage::set_paused(&env, false);
         storage::set_reserves(&env, init_base, init_quote);
 
@@ -304,12 +309,36 @@ impl ApexFuturesContract {
         admin::set_oracle_updater(&env, &caller, &updater);
     }
 
-    pub fn set_config(env: Env, caller: Address, config: Config) {
-        admin::set_config(&env, &caller, &config);
+    // --- Timelocked governance (propose → wait timelock_delay → execute) ---
+
+    /// Queue a risk/fee config change behind the timelock.
+    pub fn propose_config(env: Env, caller: Address, config: Config) {
+        admin::propose_config(&env, &caller, &config);
     }
 
-    pub fn upgrade(env: Env, caller: Address, new_wasm_hash: BytesN<32>) {
-        admin::upgrade(&env, &caller, new_wasm_hash);
+    /// Execute a queued config change once its timelock has elapsed.
+    pub fn execute_config(env: Env, caller: Address) {
+        admin::execute_config(&env, &caller);
+    }
+
+    /// Abort a queued config change.
+    pub fn cancel_config(env: Env, caller: Address) {
+        admin::cancel_config(&env, &caller);
+    }
+
+    /// Queue a WASM upgrade behind the timelock.
+    pub fn propose_upgrade(env: Env, caller: Address, new_wasm_hash: BytesN<32>) {
+        admin::propose_upgrade(&env, &caller, new_wasm_hash);
+    }
+
+    /// Execute a queued WASM upgrade once its timelock has elapsed.
+    pub fn execute_upgrade(env: Env, caller: Address) {
+        admin::execute_upgrade(&env, &caller);
+    }
+
+    /// Abort a queued WASM upgrade.
+    pub fn cancel_upgrade(env: Env, caller: Address) {
+        admin::cancel_upgrade(&env, &caller);
     }
 
     /// Sweep accrued protocol fees to the fee collector.
@@ -365,6 +394,21 @@ impl ApexFuturesContract {
 
     pub fn get_config(env: Env) -> Config {
         storage::get_config(&env)
+    }
+
+    /// Governance timelock delay in seconds.
+    pub fn get_timelock_delay(env: Env) -> u64 {
+        storage::get_timelock_delay(&env)
+    }
+
+    /// The queued upgrade awaiting its timelock, if any.
+    pub fn get_pending_upgrade(env: Env) -> Option<storage::PendingUpgrade> {
+        storage::get_pending_upgrade(&env)
+    }
+
+    /// The queued config change awaiting its timelock, if any.
+    pub fn get_pending_config(env: Env) -> Option<storage::PendingConfig> {
+        storage::get_pending_config(&env)
     }
 
     pub fn get_buckets(env: Env) -> Buckets {

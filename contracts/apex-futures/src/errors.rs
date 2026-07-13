@@ -45,4 +45,8 @@ pub enum Error {
     BelowMinPositionSize = 17,
     /// Funding settlement called before the funding interval elapsed.
     FundingTooEarly = 18,
+    /// A timelocked governance action was executed before its delay elapsed.
+    TimelockNotReady = 19,
+    /// No pending timelocked governance action to execute or cancel.
+    NothingPending = 20,
 }

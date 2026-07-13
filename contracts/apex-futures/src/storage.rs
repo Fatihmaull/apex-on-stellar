@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, Env};
+use soroban_sdk::{contracttype, Address, BytesN, Env};
 
 // --- Global scaling constants ---------------------------------------------
 
@@ -26,14 +26,17 @@ pub const PERSISTENT_BUMP: u32 = DAY_IN_LEDGERS * 60;
 #[contracttype]
 pub enum DataKey {
     // --- Instance: roles & config ---
-    Admin,         // Address with full administrative authority
-    PendingAdmin,  // Address for the 2-step admin handover
-    Pauser,        // Address allowed to trip the circuit breaker
-    FeeCollector,  // Address permitted to sweep the fee vault
-    UsdcToken,     // USDC Stellar Asset Contract (SAC) address
-    OracleUpdater, // Address permitted to push index prices
-    Paused,        // bool circuit-breaker flag
-    Config,        // Risk & fee parameters (Config struct)
+    Admin,          // Address with full administrative authority
+    PendingAdmin,   // Address for the 2-step admin handover
+    Pauser,         // Address allowed to trip the circuit breaker
+    FeeCollector,   // Address permitted to sweep the fee vault
+    UsdcToken,      // USDC Stellar Asset Contract (SAC) address
+    OracleUpdater,  // Address permitted to push index prices
+    Paused,         // bool circuit-breaker flag
+    Config,         // Risk & fee parameters (Config struct)
+    TimelockDelay,  // seconds a governance action must wait before execution (u64)
+    PendingUpgrade, // queued WASM upgrade awaiting its timelock (PendingUpgrade)
+    PendingConfig,  // queued config change awaiting its timelock (PendingConfig)
 
     // --- Instance: vAMM & oracle market state ---
     VammBase,      // x: virtual base reserve (compute units, 7 dp)
@@ -107,6 +110,24 @@ pub struct Config {
     pub min_position_size: i128,
 }
 
+/// A WASM upgrade queued behind the governance timelock.
+#[derive(Clone, Debug, PartialEq)]
+#[contracttype]
+pub struct PendingUpgrade {
+    pub wasm_hash: BytesN<32>,
+    /// Earliest ledger timestamp at which the upgrade may be executed.
+    pub eta: u64,
+}
+
+/// A config change queued behind the governance timelock.
+#[derive(Clone, Debug, PartialEq)]
+#[contracttype]
+pub struct PendingConfig {
+    pub config: Config,
+    /// Earliest ledger timestamp at which the change may be executed.
+    pub eta: u64,
+}
+
 // --- TTL helpers -----------------------------------------------------------
 
 pub fn extend_instance(env: &Env) {
@@ -133,6 +154,38 @@ pub fn set_config(env: &Env, cfg: &Config) {
 
 pub fn is_initialized(env: &Env) -> bool {
     env.storage().instance().has(&DataKey::Admin)
+}
+
+// --- Governance timelock ---------------------------------------------------
+
+pub fn get_timelock_delay(env: &Env) -> u64 {
+    env.storage()
+        .instance()
+        .get(&DataKey::TimelockDelay)
+        .unwrap_or(0)
+}
+pub fn set_timelock_delay(env: &Env, secs: u64) {
+    env.storage().instance().set(&DataKey::TimelockDelay, &secs);
+}
+
+pub fn get_pending_upgrade(env: &Env) -> Option<PendingUpgrade> {
+    env.storage().instance().get(&DataKey::PendingUpgrade)
+}
+pub fn set_pending_upgrade(env: &Env, p: &PendingUpgrade) {
+    env.storage().instance().set(&DataKey::PendingUpgrade, p);
+}
+pub fn clear_pending_upgrade(env: &Env) {
+    env.storage().instance().remove(&DataKey::PendingUpgrade);
+}
+
+pub fn get_pending_config(env: &Env) -> Option<PendingConfig> {
+    env.storage().instance().get(&DataKey::PendingConfig)
+}
+pub fn set_pending_config(env: &Env, p: &PendingConfig) {
+    env.storage().instance().set(&DataKey::PendingConfig, p);
+}
+pub fn clear_pending_config(env: &Env) {
+    env.storage().instance().remove(&DataKey::PendingConfig);
 }
 
 // --- Roles -----------------------------------------------------------------

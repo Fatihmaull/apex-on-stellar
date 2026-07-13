@@ -14,6 +14,7 @@ use crate::{ApexFuturesContract, ApexFuturesContractClient};
 
 const INIT_BASE: i128 = 1_000_000 * SCALE; // 1,000,000 virtual base units
 const INIT_QUOTE: i128 = 5_000_000 * SCALE; // implies a 5.0 USDC mark price
+const TIMELOCK: u64 = 3_600; // 1h governance timelock for tests
 
 fn default_config() -> Config {
     Config {
@@ -69,6 +70,7 @@ fn setup() -> Rig {
             INIT_BASE,
             INIT_QUOTE,
             default_config(),
+            TIMELOCK,
         ),
     );
     let client = ApexFuturesContractClient::new(&env, &contract_id);
@@ -427,25 +429,96 @@ fn test_two_step_admin_transfer() {
 }
 
 #[test]
-fn test_non_admin_cannot_set_config() {
+fn test_non_admin_cannot_propose_config() {
     let r = setup();
     let stranger = Address::generate(&r.env);
     let cfg = default_config();
     assert_eq!(
-        r.client.try_set_config(&stranger, &cfg),
+        r.client.try_propose_config(&stranger, &cfg),
         Err(Ok(Error::Unauthorized.into()))
     );
 }
 
 #[test]
-fn test_set_config_validates_bounds() {
+fn test_propose_config_validates_bounds() {
     let r = setup();
     let mut bad = default_config();
     bad.maint_margin_bps = bad.init_margin_bps + 1; // maint must be < init
     assert_eq!(
-        r.client.try_set_config(&r.admin, &bad),
+        r.client.try_propose_config(&r.admin, &bad),
         Err(Ok(Error::InvalidParams.into()))
     );
+}
+
+#[test]
+fn test_config_timelock_enforced() {
+    let r = setup();
+    let mut new_cfg = default_config();
+    new_cfg.trading_fee_bps = 25; // 0.25%
+
+    // Propose the change.
+    r.client.propose_config(&r.admin, &new_cfg);
+    // The pending change is queryable and not yet applied.
+    assert!(r.client.get_pending_config().is_some());
+    assert_eq!(r.client.get_config().trading_fee_bps, 10);
+
+    // Executing before the timelock elapses is rejected.
+    assert_eq!(
+        r.client.try_execute_config(&r.admin),
+        Err(Ok(Error::TimelockNotReady.into()))
+    );
+
+    // Advance past the timelock and execute.
+    r.env
+        .ledger()
+        .set_timestamp(r.env.ledger().timestamp() + TIMELOCK + 1);
+    r.client.execute_config(&r.admin);
+    assert_eq!(r.client.get_config().trading_fee_bps, 25);
+    assert!(r.client.get_pending_config().is_none());
+}
+
+#[test]
+fn test_config_timelock_cancel_and_empty() {
+    let r = setup();
+    // Nothing pending yet.
+    assert_eq!(
+        r.client.try_execute_config(&r.admin),
+        Err(Ok(Error::NothingPending.into()))
+    );
+    // Propose then cancel.
+    r.client.propose_config(&r.admin, &default_config());
+    r.client.cancel_config(&r.admin);
+    assert!(r.client.get_pending_config().is_none());
+    assert_eq!(
+        r.client.try_cancel_config(&r.admin),
+        Err(Ok(Error::NothingPending.into()))
+    );
+}
+
+#[test]
+fn test_upgrade_timelock_auth_and_timing() {
+    use soroban_sdk::BytesN;
+    let r = setup();
+    let stranger = Address::generate(&r.env);
+    let hash = BytesN::from_array(&r.env, &[7u8; 32]);
+
+    // Non-admin cannot propose an upgrade.
+    assert_eq!(
+        r.client.try_propose_upgrade(&stranger, &hash),
+        Err(Ok(Error::Unauthorized.into()))
+    );
+
+    // Admin proposes; it is queued but not executable yet.
+    r.client.propose_upgrade(&r.admin, &hash);
+    assert!(r.client.get_pending_upgrade().is_some());
+    assert_eq!(
+        r.client.try_execute_upgrade(&r.admin),
+        Err(Ok(Error::TimelockNotReady.into()))
+    );
+
+    // A legitimate admin can abort the proposal.
+    r.client.cancel_upgrade(&r.admin);
+    assert!(r.client.get_pending_upgrade().is_none());
 }
 
 // --- Fees ------------------------------------------------------------------

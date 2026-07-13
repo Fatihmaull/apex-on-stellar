@@ -98,3 +98,23 @@ pub fn upgraded(env: &Env, by: &Address) {
     env.events()
         .publish((symbol_short!("upgrade"),), by.clone());
 }
+
+// --- Governance timelock lifecycle ----------------------------------------
+
+/// (by, eta) — a WASM upgrade was queued behind the timelock.
+pub fn upgrade_proposed(env: &Env, by: &Address, eta: u64) {
+    env.events()
+        .publish((symbol_short!("up_prop"),), (by.clone(), eta));
+}
+
+/// (by, eta) — a config change was queued behind the timelock.
+pub fn config_proposed(env: &Env, by: &Address, eta: u64) {
+    env.events()
+        .publish((symbol_short!("cfg_prop"),), (by.clone(), eta));
+}
+
+/// A queued governance action was cancelled before execution.
+pub fn gov_cancelled(env: &Env, by: &Address) {
+    env.events()
+        .publish((symbol_short!("gov_cxl"),), by.clone());
+}
