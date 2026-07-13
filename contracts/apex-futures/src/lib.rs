@@ -14,6 +14,11 @@
 //!   FeeVault, InsuranceFund) whose sum the USDC vault always backs.
 //! - Checks-Effects-Interactions ordering around every token transfer.
 
+// The constructor and `open_position` legitimately take several parameters that
+// mirror the on-chain interface; splitting them into structs would only obscure
+// the contract's public ABI.
+#![allow(clippy::too_many_arguments)]
+
 use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env};
 
 mod admin;
@@ -69,6 +74,9 @@ impl ApexFuturesContract {
     /// - `usdc`: USDC SAC address used for all settlement.
     /// - `init_base`/`init_quote`: initial virtual reserves (7 dp).
     /// - `config`: risk, fee and oracle parameters.
+    /// - `timelock_delay`: seconds an `upgrade`/`config` change must wait between
+    ///   proposal and execution. Set to a governance-appropriate value on mainnet
+    ///   (e.g. 24–48h); may be 0 on testnet for demos.
     pub fn __constructor(
         env: Env,
         admin: Address,
@@ -79,6 +87,7 @@ impl ApexFuturesContract {
         init_base: i128,
         init_quote: i128,
         config: Config,
+        timelock_delay: u64,
     ) {
         if storage::is_initialized(&env) {
             panic_err(&env, Error::AlreadyInitialized);
@@ -94,6 +103,7 @@ impl ApexFuturesContract {
         storage::set_usdc_token(&env, &usdc);
         storage::set_oracle_updater(&env, &oracle_updater);
         storage::set_config(&env, &config);
+        storage::set_timelock_delay(&env, timelock_delay);
         storage::set_paused(&env, false);
         storage::set_reserves(&env, init_base, init_quote);
 
@@ -156,13 +166,7 @@ impl ApexFuturesContract {
     /// - `size`: virtual base units (7 dp), always positive; direction is `is_long`.
     /// - `slippage_limit`: for a long, the max acceptable entry notional; for a
     ///   short, the min acceptable notional. Pass 0 to skip the check.
-    pub fn open_position(
-        env: Env,
-        user: Address,
-        size: i128,
-        is_long: bool,
-        slippage_limit: i128,
-    ) {
+    pub fn open_position(env: Env, user: Address, size: i128, is_long: bool, slippage_limit: i128) {
         user.require_auth();
         admin::require_not_paused(&env);
 
@@ -209,7 +213,14 @@ impl ApexFuturesContract {
         storage::set_reserves(&env, new_base, new_quote);
         storage::extend_instance(&env);
 
-        events::open(&env, &user, position.size, entry_price, required_margin, fee);
+        events::open(
+            &env,
+            &user,
+            position.size,
+            entry_price,
+            required_margin,
+            fee,
+        );
     }
 
     /// Close the caller's active position at market and settle PnL/funding/fees.
@@ -301,12 +312,36 @@ impl ApexFuturesContract {
         admin::set_oracle_updater(&env, &caller, &updater);
     }
 
-    pub fn set_config(env: Env, caller: Address, config: Config) {
-        admin::set_config(&env, &caller, &config);
+    // --- Timelocked governance (propose → wait timelock_delay → execute) ---
+
+    /// Queue a risk/fee config change behind the timelock.
+    pub fn propose_config(env: Env, caller: Address, config: Config) {
+        admin::propose_config(&env, &caller, &config);
     }
 
-    pub fn upgrade(env: Env, caller: Address, new_wasm_hash: BytesN<32>) {
-        admin::upgrade(&env, &caller, new_wasm_hash);
+    /// Execute a queued config change once its timelock has elapsed.
+    pub fn execute_config(env: Env, caller: Address) {
+        admin::execute_config(&env, &caller);
+    }
+
+    /// Abort a queued config change.
+    pub fn cancel_config(env: Env, caller: Address) {
+        admin::cancel_config(&env, &caller);
+    }
+
+    /// Queue a WASM upgrade behind the timelock.
+    pub fn propose_upgrade(env: Env, caller: Address, new_wasm_hash: BytesN<32>) {
+        admin::propose_upgrade(&env, &caller, new_wasm_hash);
+    }
+
+    /// Execute a queued WASM upgrade once its timelock has elapsed.
+    pub fn execute_upgrade(env: Env, caller: Address) {
+        admin::execute_upgrade(&env, &caller);
+    }
+
+    /// Abort a queued WASM upgrade.
+    pub fn cancel_upgrade(env: Env, caller: Address) {
+        admin::cancel_upgrade(&env, &caller);
     }
 
     /// Sweep accrued protocol fees to the fee collector.
@@ -364,6 +399,21 @@ impl ApexFuturesContract {
         storage::get_config(&env)
     }
 
+    /// Governance timelock delay in seconds.
+    pub fn get_timelock_delay(env: Env) -> u64 {
+        storage::get_timelock_delay(&env)
+    }
+
+    /// The queued upgrade awaiting its timelock, if any.
+    pub fn get_pending_upgrade(env: Env) -> Option<storage::PendingUpgrade> {
+        storage::get_pending_upgrade(&env)
+    }
+
+    /// The queued config change awaiting its timelock, if any.
+    pub fn get_pending_config(env: Env) -> Option<storage::PendingConfig> {
+        storage::get_pending_config(&env)
+    }
+
     pub fn get_buckets(env: Env) -> Buckets {
         Buckets {
             total_collateral: storage::get_total_collateral(&env),
@@ -374,7 +424,10 @@ impl ApexFuturesContract {
 
     /// (cumulative_funding_index, last_settlement_timestamp)
     pub fn get_funding(env: Env) -> (i128, u64) {
-        (storage::get_cum_funding(&env), storage::get_last_funding_ts(&env))
+        (
+            storage::get_cum_funding(&env),
+            storage::get_last_funding_ts(&env),
+        )
     }
 
     pub fn is_paused(env: Env) -> bool {

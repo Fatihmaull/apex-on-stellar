@@ -1,19 +1,19 @@
+//! Funding keeps the vAMM mark price tethered to the real-world APAC GPU index.
+//!
+//! We maintain a global cumulative funding index `CumFunding` (USDC per base
+//! unit, 7 dp). Each settlement adds the (capped) premium `mark - index` scaled
+//! by the number of elapsed intervals. A position's funding owed is then
+//! `size * (CumFunding_now - entry_funding) / SCALE` — longs pay when the mark
+//! trades above the index, shorts pay when below.
+//!
+//! This is permissionless and idempotent-per-interval: anyone can poke it, but
+//! it only advances once a full `funding_interval` has elapsed.
+
 use soroban_sdk::Env;
 
 use crate::events;
 use crate::storage::{self, Position, BPS_DENOM, SCALE};
 use crate::vamm;
-
-/// Funding keeps the vAMM mark price tethered to the real-world APAC GPU index.
-///
-/// We maintain a global cumulative funding index `CumFunding` (USDC per base
-/// unit, 7 dp). Each settlement adds the (capped) premium `mark - index` scaled
-/// by the number of elapsed intervals. A position's funding owed is then
-/// `size * (CumFunding_now - entry_funding) / SCALE` — longs pay when the mark
-/// trades above the index, shorts pay when below.
-///
-/// This is permissionless and idempotent-per-interval: anyone can poke it, but
-/// it only advances once a full `funding_interval` has elapsed.
 
 /// Pending funding owed by `position` (signed; positive = position owes the
 /// protocol, negative = protocol owes the position).
@@ -55,10 +55,7 @@ pub fn settle(env: &Env, enforce: bool) -> i128 {
     // Raw premium per interval = mark - index (USDC per base unit).
     let raw_premium = mark - index;
     // Cap magnitude at index * max_funding_bps / BPS_DENOM to bound extreme moves.
-    let cap = index
-        .checked_mul(cfg.max_funding_bps)
-        .unwrap_or(i128::MAX)
-        / BPS_DENOM;
+    let cap = index.checked_mul(cfg.max_funding_bps).unwrap_or(i128::MAX) / BPS_DENOM;
     let premium = if raw_premium > cap {
         cap
     } else if raw_premium < -cap {

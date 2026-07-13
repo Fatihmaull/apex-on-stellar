@@ -65,6 +65,13 @@ in the constructor at deploy time (closes the init front-running window).
 | `oracle_staleness`         | 3600  | index older than 1h is stale for risk checks |
 | `min_position_size`        | 10000000 | 1.0 base unit minimum |
 
+### `timelock_delay` (constructor arg, seconds)
+
+Delay enforced between proposing and executing an `upgrade` or `set_config`
+governance action. **Recommended: 86400–172800 (24–48h) on mainnet.** May be `0`
+on testnet for demos. This is the users' guaranteed exit window before any
+parameter/code change takes effect.
+
 ## 3. Deploy (constructor args)
 
 ```bash
@@ -79,7 +86,22 @@ stellar contract deploy \
   --oracle_updater <ORACLE_G...> \
   --init_base 10000000000000 \
   --init_quote 50000000000000 \
-  --config '{ "init_margin_bps":"2000","maint_margin_bps":"1000","trading_fee_bps":"10","liq_penalty_bps":"500","liq_reward_bps":"5000","funding_interval":"3600","funding_admin_cut_bps":"1000","max_funding_bps":"100","oracle_max_deviation_bps":"2000","oracle_staleness":"3600","min_position_size":"10000000" }'
+  --config '{ "init_margin_bps":"2000","maint_margin_bps":"1000","trading_fee_bps":"10","liq_penalty_bps":"500","liq_reward_bps":"5000","funding_interval":"3600","funding_admin_cut_bps":"1000","max_funding_bps":"100","oracle_max_deviation_bps":"2000","oracle_staleness":"3600","min_position_size":"10000000" }' \
+  --timelock_delay 86400
+```
+
+### Governance operations (post-deploy)
+
+Config/upgrade changes are two-phase (timelocked):
+
+```bash
+# 1. Propose (admin)
+stellar contract invoke --id <CID> --source admin --network testnet \
+  -- propose_config --caller <ADMIN_G...> --config '{ ... }'
+# 2. After timelock_delay seconds, execute (admin)
+stellar contract invoke --id <CID> --source admin --network testnet \
+  -- execute_config --caller <ADMIN_G...>
+# (cancel_config aborts a pending proposal; same pattern for *_upgrade)
 ```
 
 Record the returned **contract id** into `frontend/.env.local` as

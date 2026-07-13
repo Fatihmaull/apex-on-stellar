@@ -60,7 +60,11 @@ risks tracked in §4.
    compromised admin key can drain via a malicious upgrade.
 2. **Oracle is a trusted data source.** The contract validates *movement* and
    *freshness*, not *truth*. Garbage-but-plausible prices are accepted.
-3. **No on-chain timelock** on config/upgrade yet.
+3. ~~No on-chain timelock on config/upgrade.~~ **Resolved (Phase D):** `set_config`
+   and `upgrade` now run through a two-phase timelock (`propose_*` → wait
+   `timelock_delay` → `execute_*`), giving users a guaranteed exit window. The
+   `timelock_delay` must still be set to a governance-appropriate value at deploy
+   (recommended 24–48h on mainnet; see `contracts/DEPLOYMENT.md`).
 4. **Funding model is simplified** (linear premium capped per interval); it has
    not been economically stress-modelled against adversarial open-interest skew.
 5. **vAMM depth is a fixed virtual reserve**; parameterization (init_base/quote)

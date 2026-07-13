@@ -45,7 +45,8 @@ apex-stellar/
 │           ├── oracle.rs          # Permissioned feed w/ staleness + deviation guards
 │           ├── funding.rs         # Periodic funding settlement + admin cut
 │           ├── liquidation.rs     # Penalty split: liquidator / insurance fund
-│           └── test.rs            # 25 unit + solvency-invariant tests
+│           ├── test.rs            # 28 unit + solvency-invariant tests
+│           └── fuzz.rs            # proptest property/fuzz harness
 ├── frontend/                      # Next.js 14 (App Router, TypeScript)
 │   └── src/
 │       ├── app/                   # layout, landing (/), trade terminal (/trade)
@@ -103,7 +104,7 @@ apex-stellar/
 
 ```bash
 # From the repo root
-cargo test -p apex-futures          # 25 tests should pass
+cargo test -p apex-futures          # 29 tests should pass
 stellar contract build              # -> target/wasm32v1-none/release/apex_futures.wasm
 ```
 
@@ -155,15 +156,18 @@ endpoint for production.
 
 | Area | State |
 |---|---|
-| Contract (security, funding, fees, solvency) | Hardened, 25 unit + 1 property/fuzz test green, ~28 KB WASM |
+| Contract (security, funding, fees, solvency) | Hardened, 28 unit + 1 property/fuzz test green, ~28 KB WASM |
 | Property-based fuzzing (solvency invariants) | `proptest` harness in `contracts/apex-futures/src/fuzz.rs` |
+| Governance timelock (config + upgrade) | Two-phase propose/execute with exit window |
+| CI/CD | GitHub Actions: fmt · clippy · test · build · frontend typecheck/build |
 | Frontend (design system, multi-wallet, trade UI) | Complete; `tsc` + `next build` green |
 | Repo | Consolidated — single source of truth |
-| Testnet deploy + e2e | Next up |
-| External audit, multisig governance, monitoring | Roadmap (pre-mainnet) |
+| Testnet deploy + e2e | Verified on testnet |
+| External audit, multisig custody, monitoring | Roadmap (pre-mainnet) |
 
-See [`SECURITY.md`](SECURITY.md) for the threat model and pre-audit scope, and
-[`contracts/DEPLOYMENT.md`](contracts/DEPLOYMENT.md) for the mainnet-readiness
+Docs: [`OPERATIONS.md`](OPERATIONS.md) is the business + technical operating
+handbook; [`SECURITY.md`](SECURITY.md) is the threat model and pre-audit scope;
+[`contracts/DEPLOYMENT.md`](contracts/DEPLOYMENT.md) is the mainnet-readiness
 checklist.
 
 ---

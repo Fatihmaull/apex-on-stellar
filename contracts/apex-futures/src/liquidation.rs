@@ -60,7 +60,11 @@ pub fn liquidate(env: &Env, liquidator: &Address, user: &Address) {
     // 5. Interaction: pay the liquidator's bounty in USDC.
     if reward > 0 {
         let usdc = storage::get_usdc_token(env);
-        token::Client::new(env, &usdc).transfer(&env.current_contract_address(), liquidator, &reward);
+        token::Client::new(env, &usdc).transfer(
+            &env.current_contract_address(),
+            liquidator,
+            &reward,
+        );
     }
 
     events::liquidate(env, user, liquidator, penalty, reward, user_return);

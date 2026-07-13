@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, Env};
+use soroban_sdk::{contracttype, Address, BytesN, Env};
 
 // --- Global scaling constants ---------------------------------------------
 
@@ -26,22 +26,25 @@ pub const PERSISTENT_BUMP: u32 = DAY_IN_LEDGERS * 60;
 #[contracttype]
 pub enum DataKey {
     // --- Instance: roles & config ---
-    Admin,        // Address with full administrative authority
-    PendingAdmin, // Address for the 2-step admin handover
-    Pauser,       // Address allowed to trip the circuit breaker
-    FeeCollector, // Address permitted to sweep the fee vault
-    UsdcToken,    // USDC Stellar Asset Contract (SAC) address
-    OracleUpdater,// Address permitted to push index prices
-    Paused,       // bool circuit-breaker flag
-    Config,       // Risk & fee parameters (Config struct)
+    Admin,          // Address with full administrative authority
+    PendingAdmin,   // Address for the 2-step admin handover
+    Pauser,         // Address allowed to trip the circuit breaker
+    FeeCollector,   // Address permitted to sweep the fee vault
+    UsdcToken,      // USDC Stellar Asset Contract (SAC) address
+    OracleUpdater,  // Address permitted to push index prices
+    Paused,         // bool circuit-breaker flag
+    Config,         // Risk & fee parameters (Config struct)
+    TimelockDelay,  // seconds a governance action must wait before execution (u64)
+    PendingUpgrade, // queued WASM upgrade awaiting its timelock (PendingUpgrade)
+    PendingConfig,  // queued config change awaiting its timelock (PendingConfig)
 
     // --- Instance: vAMM & oracle market state ---
-    VammBase,     // x: virtual base reserve (compute units, 7 dp)
-    VammQuote,    // y: virtual quote reserve (USDC, 7 dp)
-    OraclePrice,  // last GRC index price (USDC per base unit, 7 dp)
-    OracleTs,     // ledger timestamp of the last oracle update (u64)
-    CumFunding,   // cumulative funding index (USDC per base unit, 7 dp, signed)
-    LastFundingTs,// ledger timestamp of the last funding settlement (u64)
+    VammBase,      // x: virtual base reserve (compute units, 7 dp)
+    VammQuote,     // y: virtual quote reserve (USDC, 7 dp)
+    OraclePrice,   // last GRC index price (USDC per base unit, 7 dp)
+    OracleTs,      // ledger timestamp of the last oracle update (u64)
+    CumFunding,    // cumulative funding index (USDC per base unit, 7 dp, signed)
+    LastFundingTs, // ledger timestamp of the last funding settlement (u64)
 
     // --- Instance: solvency accounting buckets ---
     TotalCollateral, // Σ user (free + allocated) margin claims
@@ -69,7 +72,12 @@ pub struct Position {
 
 impl Position {
     pub fn empty() -> Self {
-        Position { size: 0, entry_price: 0, margin_allocated: 0, entry_funding: 0 }
+        Position {
+            size: 0,
+            entry_price: 0,
+            margin_allocated: 0,
+            entry_funding: 0,
+        }
     }
 }
 
@@ -102,14 +110,36 @@ pub struct Config {
     pub min_position_size: i128,
 }
 
+/// A WASM upgrade queued behind the governance timelock.
+#[derive(Clone, Debug, PartialEq)]
+#[contracttype]
+pub struct PendingUpgrade {
+    pub wasm_hash: BytesN<32>,
+    /// Earliest ledger timestamp at which the upgrade may be executed.
+    pub eta: u64,
+}
+
+/// A config change queued behind the governance timelock.
+#[derive(Clone, Debug, PartialEq)]
+#[contracttype]
+pub struct PendingConfig {
+    pub config: Config,
+    /// Earliest ledger timestamp at which the change may be executed.
+    pub eta: u64,
+}
+
 // --- TTL helpers -----------------------------------------------------------
 
 pub fn extend_instance(env: &Env) {
-    env.storage().instance().extend_ttl(INSTANCE_THRESHOLD, INSTANCE_BUMP);
+    env.storage()
+        .instance()
+        .extend_ttl(INSTANCE_THRESHOLD, INSTANCE_BUMP);
 }
 
 fn extend_persistent(env: &Env, key: &DataKey) {
-    env.storage().persistent().extend_ttl(key, PERSISTENT_THRESHOLD, PERSISTENT_BUMP);
+    env.storage()
+        .persistent()
+        .extend_ttl(key, PERSISTENT_THRESHOLD, PERSISTENT_BUMP);
 }
 
 // --- Config ----------------------------------------------------------------
@@ -124,6 +154,38 @@ pub fn set_config(env: &Env, cfg: &Config) {
 
 pub fn is_initialized(env: &Env) -> bool {
     env.storage().instance().has(&DataKey::Admin)
+}
+
+// --- Governance timelock ---------------------------------------------------
+
+pub fn get_timelock_delay(env: &Env) -> u64 {
+    env.storage()
+        .instance()
+        .get(&DataKey::TimelockDelay)
+        .unwrap_or(0)
+}
+pub fn set_timelock_delay(env: &Env, secs: u64) {
+    env.storage().instance().set(&DataKey::TimelockDelay, &secs);
+}
+
+pub fn get_pending_upgrade(env: &Env) -> Option<PendingUpgrade> {
+    env.storage().instance().get(&DataKey::PendingUpgrade)
+}
+pub fn set_pending_upgrade(env: &Env, p: &PendingUpgrade) {
+    env.storage().instance().set(&DataKey::PendingUpgrade, p);
+}
+pub fn clear_pending_upgrade(env: &Env) {
+    env.storage().instance().remove(&DataKey::PendingUpgrade);
+}
+
+pub fn get_pending_config(env: &Env) -> Option<PendingConfig> {
+    env.storage().instance().get(&DataKey::PendingConfig)
+}
+pub fn set_pending_config(env: &Env, p: &PendingConfig) {
+    env.storage().instance().set(&DataKey::PendingConfig, p);
+}
+pub fn clear_pending_config(env: &Env) {
+    env.storage().instance().remove(&DataKey::PendingConfig);
 }
 
 // --- Roles -----------------------------------------------------------------
@@ -150,13 +212,19 @@ pub fn set_pauser(env: &Env, addr: &Address) {
     env.storage().instance().set(&DataKey::Pauser, addr);
 }
 pub fn get_fee_collector(env: &Env) -> Address {
-    env.storage().instance().get(&DataKey::FeeCollector).unwrap()
+    env.storage()
+        .instance()
+        .get(&DataKey::FeeCollector)
+        .unwrap()
 }
 pub fn set_fee_collector(env: &Env, addr: &Address) {
     env.storage().instance().set(&DataKey::FeeCollector, addr);
 }
 pub fn get_oracle_updater(env: &Env) -> Address {
-    env.storage().instance().get(&DataKey::OracleUpdater).unwrap()
+    env.storage()
+        .instance()
+        .get(&DataKey::OracleUpdater)
+        .unwrap()
 }
 pub fn set_oracle_updater(env: &Env, addr: &Address) {
     env.storage().instance().set(&DataKey::OracleUpdater, addr);
@@ -171,7 +239,10 @@ pub fn set_usdc_token(env: &Env, addr: &Address) {
 // --- Pause -----------------------------------------------------------------
 
 pub fn is_paused(env: &Env) -> bool {
-    env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+    env.storage()
+        .instance()
+        .get(&DataKey::Paused)
+        .unwrap_or(false)
 }
 pub fn set_paused(env: &Env, paused: bool) {
     env.storage().instance().set(&DataKey::Paused, &paused);
@@ -180,8 +251,16 @@ pub fn set_paused(env: &Env, paused: bool) {
 // --- vAMM reserves ---------------------------------------------------------
 
 pub fn get_reserves(env: &Env) -> (i128, i128) {
-    let base = env.storage().instance().get(&DataKey::VammBase).unwrap_or(0);
-    let quote = env.storage().instance().get(&DataKey::VammQuote).unwrap_or(0);
+    let base = env
+        .storage()
+        .instance()
+        .get(&DataKey::VammBase)
+        .unwrap_or(0);
+    let quote = env
+        .storage()
+        .instance()
+        .get(&DataKey::VammQuote)
+        .unwrap_or(0);
     (base, quote)
 }
 pub fn set_reserves(env: &Env, base: i128, quote: i128) {
@@ -192,13 +271,19 @@ pub fn set_reserves(env: &Env, base: i128, quote: i128) {
 // --- Oracle ----------------------------------------------------------------
 
 pub fn get_oracle_price(env: &Env) -> i128 {
-    env.storage().instance().get(&DataKey::OraclePrice).unwrap_or(0)
+    env.storage()
+        .instance()
+        .get(&DataKey::OraclePrice)
+        .unwrap_or(0)
 }
 pub fn set_oracle_price(env: &Env, price: i128) {
     env.storage().instance().set(&DataKey::OraclePrice, &price);
 }
 pub fn get_oracle_ts(env: &Env) -> u64 {
-    env.storage().instance().get(&DataKey::OracleTs).unwrap_or(0)
+    env.storage()
+        .instance()
+        .get(&DataKey::OracleTs)
+        .unwrap_or(0)
 }
 pub fn set_oracle_ts(env: &Env, ts: u64) {
     env.storage().instance().set(&DataKey::OracleTs, &ts);
@@ -207,13 +292,19 @@ pub fn set_oracle_ts(env: &Env, ts: u64) {
 // --- Funding ---------------------------------------------------------------
 
 pub fn get_cum_funding(env: &Env) -> i128 {
-    env.storage().instance().get(&DataKey::CumFunding).unwrap_or(0)
+    env.storage()
+        .instance()
+        .get(&DataKey::CumFunding)
+        .unwrap_or(0)
 }
 pub fn set_cum_funding(env: &Env, v: i128) {
     env.storage().instance().set(&DataKey::CumFunding, &v);
 }
 pub fn get_last_funding_ts(env: &Env) -> u64 {
-    env.storage().instance().get(&DataKey::LastFundingTs).unwrap_or(0)
+    env.storage()
+        .instance()
+        .get(&DataKey::LastFundingTs)
+        .unwrap_or(0)
 }
 pub fn set_last_funding_ts(env: &Env, ts: u64) {
     env.storage().instance().set(&DataKey::LastFundingTs, &ts);
@@ -222,19 +313,28 @@ pub fn set_last_funding_ts(env: &Env, ts: u64) {
 // --- Solvency buckets ------------------------------------------------------
 
 pub fn get_total_collateral(env: &Env) -> i128 {
-    env.storage().instance().get(&DataKey::TotalCollateral).unwrap_or(0)
+    env.storage()
+        .instance()
+        .get(&DataKey::TotalCollateral)
+        .unwrap_or(0)
 }
 pub fn set_total_collateral(env: &Env, v: i128) {
     env.storage().instance().set(&DataKey::TotalCollateral, &v);
 }
 pub fn get_fee_vault(env: &Env) -> i128 {
-    env.storage().instance().get(&DataKey::FeeVault).unwrap_or(0)
+    env.storage()
+        .instance()
+        .get(&DataKey::FeeVault)
+        .unwrap_or(0)
 }
 pub fn set_fee_vault(env: &Env, v: i128) {
     env.storage().instance().set(&DataKey::FeeVault, &v);
 }
 pub fn get_insurance_fund(env: &Env) -> i128 {
-    env.storage().instance().get(&DataKey::InsuranceFund).unwrap_or(0)
+    env.storage()
+        .instance()
+        .get(&DataKey::InsuranceFund)
+        .unwrap_or(0)
 }
 pub fn set_insurance_fund(env: &Env, v: i128) {
     env.storage().instance().set(&DataKey::InsuranceFund, &v);
@@ -258,7 +358,11 @@ pub fn set_margin(env: &Env, user: &Address, balance: i128) {
 
 pub fn get_position(env: &Env, user: &Address) -> Position {
     let key = DataKey::Position(user.clone());
-    let pos = env.storage().persistent().get(&key).unwrap_or(Position::empty());
+    let pos = env
+        .storage()
+        .persistent()
+        .get(&key)
+        .unwrap_or(Position::empty());
     if env.storage().persistent().has(&key) {
         extend_persistent(env, &key);
     }
@@ -270,5 +374,7 @@ pub fn set_position(env: &Env, user: &Address, position: &Position) {
     extend_persistent(env, &key);
 }
 pub fn remove_position(env: &Env, user: &Address) {
-    env.storage().persistent().remove(&DataKey::Position(user.clone()));
+    env.storage()
+        .persistent()
+        .remove(&DataKey::Position(user.clone()));
 }
