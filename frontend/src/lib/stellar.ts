@@ -142,4 +142,6 @@ const CONTRACT_ERRORS: Record<number, string> = {
   16: 'Arithmetic overflow.',
   17: 'Position size is below the minimum.',
   18: 'Funding settled too recently.',
+  19: 'Governance timelock has not elapsed yet.',
+  20: 'No pending governance action.',
 };

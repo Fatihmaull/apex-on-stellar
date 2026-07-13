@@ -112,6 +112,7 @@ proptest! {
                 INIT_BASE,
                 INIT_QUOTE,
                 fuzz_config(),
+                0u64, // no governance timelock needed for invariant fuzzing
             ),
         );
         let client = ApexFuturesContractClient::new(&env, &contract_id);
