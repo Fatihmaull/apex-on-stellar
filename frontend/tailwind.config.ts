@@ -1,87 +1,92 @@
 import type { Config } from 'tailwindcss';
 
 /**
- * APEX design system — an institutional "compute exchange" aesthetic inspired by
- * ornn.com: minimal, data-forward, generous whitespace, uppercase mono labels,
- * warm amber accent over a near-black terminal with cream "paper" surfaces.
+ * APEX design system — a monochrome, editorial "financial infrastructure"
+ * aesthetic modeled on ornn.com: pure black canvas, off-white type, a full
+ * greyscale hierarchy, mono micro-labels, restrained grotesque headings, and
+ * near-zero colour. Colour is reserved almost entirely for trading PnL (up/down).
  */
 const config: Config = {
   content: ['./src/**/*.{ts,tsx}'],
   theme: {
     extend: {
       colors: {
-        // Dark terminal surfaces
+        // Canvas + raised surfaces (near-black steps).
         ink: {
-          900: '#08080A', // page background
-          800: '#0D0E11', // raised surface
-          700: '#131519', // card
-          600: '#1B1E24', // input / hover
-          500: '#272B33', // border-strong
+          900: '#000000', // page
+          800: '#0A0A0B', // section / raised
+          700: '#121213', // card (ornn #121213)
+          600: '#1B1C1F', // input / hover
+          500: '#26272B', // strong border / chip (ornn #26272B)
         },
-        line: 'rgba(255,255,255,0.08)', // hairline borders
-        // Warm cream "paper" for landing contrast sections
+        line: 'rgba(255,255,255,0.10)', // hairline border
+        // Light "paper" sections (ornn alternates to #F3F3F3).
         paper: {
-          DEFAULT: '#F4F0E8',
-          soft: '#EDE7DA',
-          ink: '#14130F',
+          DEFAULT: '#F3F3F3',
+          soft: '#E7E7E7',
+          ink: '#0A0A0B',
+          line: 'rgba(0,0,0,0.10)',
         },
-        // Warm forge accent
+        // Foreground greyscale (ornn ramp).
+        fg: {
+          DEFAULT: '#F3F3F3', // primary text
+          muted: '#B2B8C0',
+          dim: '#949BA5',
+          faint: '#6F7681',
+          ghost: '#3D4045',
+        },
+        // Emphasis = brightness, not hue. "accent" is pure white.
         accent: {
-          DEFAULT: '#FF6A2B',
-          soft: '#FF8A56',
-          dim: '#B8461B',
+          DEFAULT: '#FFFFFF',
+          soft: '#F3F3F3',
         },
-        ember: '#F5A623',
-        // Semantic
-        up: '#3FD98B',
-        down: '#FF5C6C',
-        muted: '#8A8F99',
-        subtle: '#5A5F69',
+        // Trading semantics only — deliberately muted.
+        up: '#5BD08B',
+        down: '#F2556C',
+        ember: '#C9A227', // caution / paused (restrained gold)
+        // muted alias kept for legacy component classes
+        muted: '#949BA5',
+        subtle: '#6F7681',
       },
       fontFamily: {
         sans: ['var(--font-sans)', 'system-ui', 'sans-serif'],
-        display: ['var(--font-display)', 'Georgia', 'serif'],
+        display: ['var(--font-display)', 'Georgia', 'sans-serif'],
         mono: ['var(--font-mono)', 'ui-monospace', 'monospace'],
       },
       fontSize: {
-        'label': ['11px', { lineHeight: '1.2', letterSpacing: '0.12em' }],
+        label: ['11px', { lineHeight: '1.3', letterSpacing: '0.14em' }],
+      },
+      letterSpacing: {
+        tightest: '-0.04em',
       },
       borderRadius: {
-        card: '10px',
+        card: '6px',
         pill: '999px',
       },
       boxShadow: {
-        card: '0 1px 0 0 rgba(255,255,255,0.03) inset, 0 8px 30px -12px rgba(0,0,0,0.6)',
-        glow: '0 0 0 1px rgba(255,106,43,0.4), 0 0 30px -6px rgba(255,106,43,0.5)',
-        pop: '0 20px 60px -20px rgba(0,0,0,0.8)',
+        card: '0 1px 0 0 rgba(255,255,255,0.03) inset',
+        pop: '0 24px 70px -24px rgba(0,0,0,0.9)',
       },
       keyframes: {
         'fade-up': {
-          '0%': { opacity: '0', transform: 'translateY(8px)' },
+          '0%': { opacity: '0', transform: 'translateY(10px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
-        'scale-in': {
-          '0%': { opacity: '0', transform: 'scale(0.96)' },
-          '100%': { opacity: '1', transform: 'scale(1)' },
-        },
-        'marquee': {
+        marquee: {
           '0%': { transform: 'translateX(0)' },
           '100%': { transform: 'translateX(-50%)' },
         },
-        'ember-pulse': {
+        blink: {
           '0%, 100%': { opacity: '1' },
-          '50%': { opacity: '0.55' },
+          '50%': { opacity: '0.25' },
         },
-        'shimmer': {
-          '100%': { transform: 'translateX(100%)' },
-        },
+        shimmer: { '100%': { transform: 'translateX(100%)' } },
       },
       animation: {
-        'fade-up': 'fade-up 0.5s cubic-bezier(0.22,1,0.36,1) both',
-        'scale-in': 'scale-in 0.2s cubic-bezier(0.22,1,0.36,1) both',
-        'marquee': 'marquee 40s linear infinite',
-        'ember-pulse': 'ember-pulse 2.4s ease-in-out infinite',
-        'shimmer': 'shimmer 1.6s infinite',
+        'fade-up': 'fade-up 0.6s cubic-bezier(0.22,1,0.36,1) both',
+        marquee: 'marquee 46s linear infinite',
+        blink: 'blink 1.6s steps(1) infinite',
+        shimmer: 'shimmer 1.6s infinite',
       },
     },
   },
