@@ -11,6 +11,7 @@
 /frontend/.next/
 /frontend/out/
 /frontend/build/
+*.tsbuildinfo
 .env
 .env*.local
 
