@@ -42,12 +42,12 @@ jobs:
       - name: Unit + property tests
         run: cargo test -p apex-futures
 
-      - name: Install Stellar CLI
-        run: cargo install --locked stellar-cli --version ^22 || cargo install --locked stellar-cli
-
-      - name: Build optimized WASM
+      # Build the wasm directly with cargo (the wasm target is installed above).
+      # This is what `stellar contract build` wraps, without needing to compile
+      # the Stellar CLI from source in CI.
+      - name: Build WASM
         run: |
-          stellar contract build
+          cargo build --target wasm32v1-none --release -p apex-futures
           ls -lh target/wasm32v1-none/release/apex_futures.wasm
 
   frontend:
