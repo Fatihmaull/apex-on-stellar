@@ -14,6 +14,11 @@
 //!   FeeVault, InsuranceFund) whose sum the USDC vault always backs.
 //! - Checks-Effects-Interactions ordering around every token transfer.
 
+// The constructor and `open_position` legitimately take several parameters that
+// mirror the on-chain interface; splitting them into structs would only obscure
+// the contract's public ABI.
+#![allow(clippy::too_many_arguments)]
+
 use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env};
 
 mod admin;
@@ -153,13 +158,7 @@ impl ApexFuturesContract {
     /// - `size`: virtual base units (7 dp), always positive; direction is `is_long`.
     /// - `slippage_limit`: for a long, the max acceptable entry notional; for a
     ///   short, the min acceptable notional. Pass 0 to skip the check.
-    pub fn open_position(
-        env: Env,
-        user: Address,
-        size: i128,
-        is_long: bool,
-        slippage_limit: i128,
-    ) {
+    pub fn open_position(env: Env, user: Address, size: i128, is_long: bool, slippage_limit: i128) {
         user.require_auth();
         admin::require_not_paused(&env);
 
@@ -206,7 +205,14 @@ impl ApexFuturesContract {
         storage::set_reserves(&env, new_base, new_quote);
         storage::extend_instance(&env);
 
-        events::open(&env, &user, position.size, entry_price, required_margin, fee);
+        events::open(
+            &env,
+            &user,
+            position.size,
+            entry_price,
+            required_margin,
+            fee,
+        );
     }
 
     /// Close the caller's active position at market and settle PnL/funding/fees.
@@ -371,7 +377,10 @@ impl ApexFuturesContract {
 
     /// (cumulative_funding_index, last_settlement_timestamp)
     pub fn get_funding(env: Env) -> (i128, u64) {
-        (storage::get_cum_funding(&env), storage::get_last_funding_ts(&env))
+        (
+            storage::get_cum_funding(&env),
+            storage::get_last_funding_ts(&env),
+        )
     }
 
     pub fn is_paused(env: Env) -> bool {

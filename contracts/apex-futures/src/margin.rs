@@ -107,7 +107,11 @@ pub fn health_factor(env: &Env, user: &Address) -> i128 {
         return SCALE * 100;
     }
     let index = storage::get_oracle_price(env);
-    let price = if index > 0 { index } else { vamm::get_mark_price(env) };
+    let price = if index > 0 {
+        index
+    } else {
+        vamm::get_mark_price(env)
+    };
     health_factor_at(env, &pos, price)
 }
 
@@ -154,6 +158,9 @@ pub fn settle_close(env: &Env, released: i128, pnl: i128, funding_owed: i128, fe
     // USDC vault (untouched here) still fully backs all claims.
     storage::set_fee_vault(env, storage::get_fee_vault(env) + delta_fee_vault);
     storage::set_insurance_fund(env, insurance + (released - credited) - delta_fee_vault);
-    storage::set_total_collateral(env, storage::get_total_collateral(env) + (credited - released));
+    storage::set_total_collateral(
+        env,
+        storage::get_total_collateral(env) + (credited - released),
+    );
     credited
 }

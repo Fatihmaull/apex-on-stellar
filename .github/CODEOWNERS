@@ -1,0 +1,7 @@
+# Default owner for everything in the repo.
+* @Fatihmaull
+
+# Contract changes carry the highest risk — require explicit review.
+/contracts/ @Fatihmaull
+/SECURITY.md @Fatihmaull
+/.github/ @Fatihmaull
