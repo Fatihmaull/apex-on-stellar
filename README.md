@@ -1,141 +1,171 @@
-# APEX: APAC Compute Exchange 
+# APEX — APAC Compute Exchange
 
-APEX is a decentralized, cash-settled compute futures exchange developed for the **APAC Stellar Hackathon (DeFi & Liquidity Track)**. It utilizes a **Virtual Automated Market Maker (vAMM)** model to enable leverage-based trading of virtual GPU/compute hours, settling exclusively in USDC via the Stellar Asset Contract (SAC).
+APEX is a decentralized, cash-settled **compute-power futures exchange** on Stellar
+(Soroban). It turns GPU compute (H100/B200/GB200-class) into a standardized,
+tradable commodity so data-center operators can hedge hardware depreciation, AI
+labs can lock in future capacity costs, and traders can price the **APAC GPU
+Index** — all settled in USDC via the Stellar Asset Contract (SAC).
+
+The exchange uses a **virtual AMM** (constant-product `x · y = k`) for instant
+price discovery with no bootstrap liquidity providers, and a GRC oracle layer for
+real-world index anchoring.
+
+> ⚠️ **Testnet software.** Not audited, not for mainnet, not financial advice.
 
 ---
 
-## Key Features
+## Highlights
 
-1. **Compute Power Futures**: Buy/sell virtual base compute units (representing GPU hours, e.g. H100 GPU compute indexes) on leverage.
-2. **Virtual Automated Market Maker (vAMM)**: Zero-liquidity-provider requirement. Trade virtual compute contracts directly against a constant product ($x \cdot y = k$) virtual price discovery model.
-3. **Cash Settlement in USDC**: Positions are funded, collateralized, and settled exclusively using USDC through the Soroban token interface (SAC).
-4. **Decentralized Oracles**: Authorized index administrators feed verified GPU spot index prices (e.g. from GRC networks) to compute futures mark prices.
-5. **Robust Liquidation System**: Liquidators can close underwater positions (health factor < 1.0) and receive a 5% liquidation bounty from the slashed margin.
+- **vAMM price discovery** — constant-product virtual market, no LPs required.
+- **Cash-settled in USDC** — native SAC, no synthetic tokens.
+- **Up to 10× leverage** with maintenance-margin liquidations.
+- **Enterprise-hardened contract** — typed errors, RBAC, circuit breaker,
+  upgradeability, index-priced risk, solvency-by-construction accounting.
+- **Multi-wallet dApp** — Freighter / Albedo / xBull via Stellar Wallets Kit,
+  built on a Tailwind + Framer Motion design system.
 
 ---
 
-## Repository Structure
+## Architecture
 
 ```
-apex-compute-exchange/
-├── README.md                  # This file
-├── .gitignore                 # Root gitignore
-├── contracts/                 # Soroban Smart Contracts (Rust)
-│   ├── Cargo.toml             # Rust package configuration
+apex-stellar/
+├── Cargo.toml                     # Rust workspace (member: contracts/apex-futures)
+├── contracts/
+│   ├── DEPLOYMENT.md              # Mainnet deployment checklist & params
+│   └── apex-futures/              # Soroban contract (crate: apex-futures)
+│       └── src/
+│           ├── lib.rs             # Entry points & public dispatch
+│           ├── errors.rs          # #[contracterror] enum (stable codes)
+│           ├── events.rs          # Structured event emission (GRC auditability)
+│           ├── admin.rs           # RBAC, pause, upgrade, config validation
+│           ├── storage.rs         # Typed storage + TTL management
+│           ├── vamm.rs            # Constant-product math (overflow-safe)
+│           ├── margin.rs          # Collateral, health factor (index-priced)
+│           ├── oracle.rs          # Permissioned feed w/ staleness + deviation guards
+│           ├── funding.rs         # Periodic funding settlement + admin cut
+│           ├── liquidation.rs     # Penalty split: liquidator / insurance fund
+│           └── test.rs            # 25 unit + solvency-invariant tests
+├── frontend/                      # Next.js 14 (App Router, TypeScript)
 │   └── src/
-│       ├── lib.rs             # Contract entry point & public dispatch
-│       ├── storage.rs         # Soroban storage abstractions
-│       ├── margin.rs          # Margin account & health factor calculations
-│       ├── vamm.rs            # Virtual AMM pricing and trading math
-│       ├── oracle.rs          # Permissioned index feed
-│       └── liquidation.rs     # Slashing logic
-└── frontend/                  # Next.js Web Dashboard
-    ├── package.json           # Frontend dependencies
-    ├── next.config.js         # Next.js bundler settings
-    └── src/
-        ├── app/
-        │   ├── page.tsx       # Main trading layout & dashboard view
-        │   ├── layout.tsx     # Custom global font & HTML head wrapper
-        │   └── globals.css    # Premium CSS design system (neon dark mode)
-        ├── components/
-        │   ├── WalletConnect.tsx    # Freighter connection button & active state
-        │   ├── BalanceDisplay.tsx   # XLM / USDC balance display fetches
-        │   ├── TradeForm.tsx        # Multi-leverage long/short order entry
-        │   └── TransactionResult.tsx # StellarExpert receipt lookup & status messages
-        ├── hooks/
-        │   └── useSoroban.ts  # Wallet interface & smart contract hook
-        └── lib/
-            └── stellar.ts     # Stellar SDK transaction wrapper
+│       ├── app/                   # layout, landing (/), trade terminal (/trade)
+│       ├── components/
+│       │   ├── ui/                # Button, Modal, Dropdown, Toast, Card, …
+│       │   ├── wallet/            # ConnectWalletButton, WalletModal
+│       │   ├── landing/           # Hero, Features, Ticker, …
+│       │   └── trade/             # StatsBar, TradePanel, PositionPanel, …
+│       ├── config/env.ts          # Typed NEXT_PUBLIC_* config
+│       ├── hooks/useProtocol.ts   # Market + user polling, write actions
+│       ├── lib/                   # stellar (RPC), contract (typed client), walletKit
+│       ├── stores/walletStore.ts  # Zustand wallet state
+│       └── providers/             # Toast + wallet auto-reconnect
+└── scripts/                       # Oracle feeder + liquidation keeper (reference)
 ```
+
+### Contract security model
+
+- **Typed failures** — every guard returns a stable `#[contracterror]` code
+  (mirrored in the frontend for friendly messages) instead of bare panics.
+- **Constructor init** — configuration is set atomically at deploy, closing the
+  "anyone calls `initialize` first" front-running window.
+- **RBAC** — separate `admin` (2-step handover), `pauser`, `oracle_updater`,
+  and `fee_collector` principals.
+- **Circuit breaker** — pausing blocks *new* risk (opens) but never traps funds
+  (close / withdraw / liquidate stay open).
+- **Upgradeability** — admin-gated `update_current_contract_wasm`, audited via events.
+- **Index-priced risk** — health factor and liquidations use the fresh oracle
+  index, not the manipulable vAMM mark.
+- **Oracle hardening** — timestamped prices with staleness rejection and a
+  deviation band vs. the last update.
+- **Solvency by construction** — three accounting buckets (`TotalCollateral`,
+  `FeeVault`, `InsuranceFund`) whose sum the USDC vault always backs; profit
+  payouts are capped by the insurance fund and bad debt is absorbed there.
+
+### Protocol economics
+
+- **Trading fee** 0.1% (configurable) on open and close → fee vault.
+- **Funding rate** — periodic `settle_funding()` aligns mark to index; a small
+  admin cut accrues to the protocol.
+- **Liquidation** — 5% penalty split between the liquidator bounty and the
+  insurance fund.
 
 ---
 
-## Setup & Deployment Instructions
+## Getting started
 
-### 1. Smart Contract Deployment (Local & Testnet)
+### Prerequisites
 
-#### Prerequisites
-- Rust, Cargo, and `wasm32-unknown-unknown` target.
-- Stellar CLI installed.
+- Rust + `stellar` CLI (Soroban), with the WASM target.
+- Node.js 18+.
+- A Stellar wallet extension (Freighter, Albedo, or xBull) set to **Testnet**.
 
-#### Local Development
-1. **Build contracts**:
-   ```bash
-   cd contracts
-   cargo build --target wasm32-unknown-unknown --release
-   ```
-2. **Run Local Sandbox Network**:
-   ```bash
-   stellar network add --global local \
-     --rpc-url "http://localhost:8000/soroban/rpc" \
-     --network-passphrase "Local Sandbox Stellar Network ; September 2022"
-   
-   stellar-sandbox --port 8000
-   ```
-3. **Deploy Contract**:
-   ```bash
-   stellar contract deploy \
-     --wasm target/wasm32-unknown-unknown/release/apex_futures.wasm \
-     --source admin \
-     --network local
-   ```
+### 1. Smart contract
 
-#### Testnet Setup
-To deploy on Stellar Testnet:
 ```bash
-stellar contract deploy \
-  --wasm target/wasm32-unknown-unknown/release/apex_futures.wasm \
-  --source your_funded_testnet_account \
-  --network testnet
+# From the repo root
+cargo test -p apex-futures          # 25 tests should pass
+stellar contract build              # -> target/wasm32v1-none/release/apex_futures.wasm
 ```
 
+Deploy (constructor takes all config atomically — see
+[`contracts/DEPLOYMENT.md`](contracts/DEPLOYMENT.md) for the full parameter
+table, identities, and multisig guidance):
+
+```bash
+stellar contract optimize --wasm target/wasm32v1-none/release/apex_futures.wasm
+stellar contract deploy \
+  --wasm target/wasm32v1-none/release/apex_futures.optimized.wasm \
+  --source deployer --network testnet \
+  -- --admin <G...> --pauser <G...> --fee_collector <G...> \
+     --usdc <USDC_SAC_C...> --oracle_updater <G...> \
+     --init_base 10000000000000 --init_quote 50000000000000 \
+     --config '{ ... }'
+```
+
+### 2. Frontend
+
+```bash
+cd frontend
+npm install
+cp .env.local.example .env.local    # then fill in your deployed values
+npm run dev                         # http://localhost:3000
+```
+
+Required environment variables (see [`.env.local.example`](frontend/.env.local.example)):
+
+| Variable | Purpose |
+|---|---|
+| `NEXT_PUBLIC_CONTRACT_ID` | Deployed `apex-futures` contract id |
+| `NEXT_PUBLIC_USDC_SAC` | USDC Stellar Asset Contract id (collateral) |
+| `NEXT_PUBLIC_NETWORK` | `TESTNET` or `PUBLIC` |
+| `NEXT_PUBLIC_RPC_URL` | Soroban RPC endpoint |
+| `NEXT_PUBLIC_HORIZON_URL` | Horizon endpoint (balances) |
+| `NEXT_PUBLIC_NETWORK_PASSPHRASE` | Network passphrase (mismatch detection) |
+| `NEXT_PUBLIC_EXPLORER_URL` | Explorer base (e.g. stellar.expert testnet) |
+
+### 3. Keepers (optional, testnet)
+
+Reference oracle feeder and liquidation keeper scripts live in
+[`scripts/`](scripts/README.md) — wire the feeder to your real GRC aggregation
+endpoint for production.
+
 ---
 
-### 2. Frontend Development
+## Development status
 
-#### Prerequisites
-- Node.js (v18+)
-- Freighter Wallet installed as a browser extension (configured to **Testnet**).
+| Area | State |
+|---|---|
+| Contract (security, funding, fees, solvency) | Hardened, 25 tests green, builds to ~28 KB WASM |
+| Frontend (design system, multi-wallet, trade UI) | Complete; `tsc` + `next build` green |
+| Repo | Consolidated — single source of truth |
+| Testnet deploy + e2e | Next up |
+| External audit, multisig governance, monitoring | Roadmap (pre-mainnet) |
 
-#### Installation
-1. Go to the frontend directory:
-   ```bash
-   cd frontend
-   npm install
-   ```
-2. Create or configure a `.env.local` to point to the deployed contract address:
-   ```env
-   NEXT_PUBLIC_CONTRACT_ID="CAC_YOUR_DEPLOYED_CONTRACT_ID"
-   NEXT_PUBLIC_USDC_ASSET_ID="CBG_TESTNET_USDC_SAC_ADDRESS"
-   ```
-3. Start the Next.js development server:
-   ```bash
-   npm run dev
-   ```
-4. Open [http://localhost:3000](http://localhost:3000) in your browser.
+See [`contracts/DEPLOYMENT.md`](contracts/DEPLOYMENT.md) for the mainnet-readiness
+checklist.
 
 ---
 
-## Hackathon Demonstration Deliverables
+## License
 
-Below are placeholders for the four required screenshots illustrating the successful integration and execution of user actions:
-
-### 1. Wallet Connected State
-*Screenshot demonstrating Freighter connection status, displaying the connected account's public key.*
-<!-- [Wallet connected state] -->
-![Wallet Connected State](./docs/screenshots/wallet_connected.png)
-
-### 2. Balance Displayed
-*Screenshot showing the user's active XLM balance and testnet USDC balance fetched via Horizon.*
-<!-- [Balance displayed] -->
-![Balance Displayed](./docs/screenshots/balance_displayed.png)
-
-### 3. Successful Testnet Transaction
-*Screenshot of the user signing and submitting a margin deposit / trade order on Stellar Testnet.*
-<!-- [Successful testnet transaction] -->
-![Successful Testnet Transaction](./docs/screenshots/successful_transaction.png)
-
-### 4. Transaction Result Shown to User
-*Screenshot of the transaction receipt showing the success status, transaction hash, and explorer link.*
-<!-- [Transaction result shown to user] -->
-![Transaction Result Shown to User](./docs/screenshots/transaction_result.png)
+Testnet / research software provided as-is. See repository for details.
