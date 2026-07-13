@@ -28,11 +28,11 @@ export default function Home() {
     : 0;
 
   const positionValue = userPosition && userPosition.size !== 0
-    ? userPosition.size.abs() * markPrice
+    ? Math.abs(userPosition.size) * markPrice
     : 0;
 
   const entryValue = userPosition && userPosition.size !== 0
-    ? userPosition.size.abs() * userPosition.entryPrice
+    ? Math.abs(userPosition.size) * userPosition.entryPrice
     : 0;
 
   const pnl = userPosition && userPosition.size !== 0
@@ -132,7 +132,7 @@ export default function Home() {
                   <div style={{ background: 'var(--bg-secondary)', padding: '12px', borderRadius: '8px' }}>
                     <div style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>POSITION SIZE</div>
                     <div style={{ fontSize: '16px', fontWeight: '700', marginTop: '4px' }}>
-                      {userPosition.size.abs().toFixed(2)} V-GPU Hrs
+                      {Math.abs(userPosition.size).toFixed(2)} V-GPU Hrs
                     </div>
                   </div>
 

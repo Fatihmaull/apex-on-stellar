@@ -1,7 +1,7 @@
-import { 
-  Server as HorizonServer, 
-  rpc, 
-  Networks, 
+import {
+  Horizon,
+  rpc,
+  Networks,
   TransactionBuilder, 
   Account, 
   Contract, 
@@ -14,7 +14,7 @@ export const HORIZON_URL = 'https://horizon-testnet.stellar.org';
 export const SOROBAN_RPC_URL = 'https://soroban-testnet.stellar.org';
 export const NETWORK_PASSPHRASE = Networks.TESTNET;
 
-export const horizonServer = new HorizonServer(HORIZON_URL);
+export const horizonServer = new Horizon.Server(HORIZON_URL);
 export const rpcServer = new rpc.Server(SOROBAN_RPC_URL);
 
 /**
@@ -38,7 +38,7 @@ export async function fetchBalances(publicKey: string, usdcAssetId?: string): Pr
     for (const bal of accountDetails.balances) {
       if (bal.asset_type === 'native') {
         xlmBalance = bal.balance;
-      } else if (bal.asset_code === 'USDC') {
+      } else if (bal.asset_type !== 'liquidity_pool_shares' && bal.asset_code === 'USDC') {
         usdcBalance = bal.balance;
       }
     }
@@ -141,33 +141,26 @@ export async function prepareContractCall(
  */
 export async function submitTransaction(signedXdr: string): Promise<string> {
   const tx = TransactionBuilder.fromXDR(signedXdr, NETWORK_PASSPHRASE);
-  let response = await rpcServer.sendTransaction(tx);
+  const response = await rpcServer.sendTransaction(tx);
 
   if (response.status === 'ERROR') {
     throw new Error(`Failed to send transaction: ${JSON.stringify(response.errorResult)}`);
   }
 
-  // Poll for the transaction result
-  let status = response.status;
+  // Poll for the transaction result. NOT_FOUND means it has not been included in a ledger yet.
   const txHash = response.hash;
-  
-  let attempts = 0;
-  while (status === 'PENDING' && attempts < 10) {
+
+  for (let attempts = 0; attempts < 10; attempts++) {
     await new Promise((resolve) => setTimeout(resolve, 2000));
     const txStatus = await rpcServer.getTransaction(txHash);
-    status = txStatus.status;
-    
-    if (status === 'SUCCESS') {
+
+    if (txStatus.status === rpc.Api.GetTransactionStatus.SUCCESS) {
       return txHash;
-    } else if (status === 'FAILED') {
-      throw new Error(`Transaction failed in execution: ${JSON.stringify(txStatus.resultResultXdr)}`);
     }
-    attempts++;
+    if (txStatus.status === rpc.Api.GetTransactionStatus.FAILED) {
+      throw new Error(`Transaction failed in execution: ${JSON.stringify(txStatus.resultXdr)}`);
+    }
   }
 
-  if (status === 'PENDING') {
-    throw new Error('Transaction execution timed out.');
-  }
-
-  return txHash;
+  throw new Error('Transaction execution timed out.');
 }

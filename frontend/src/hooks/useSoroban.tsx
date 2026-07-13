@@ -1,8 +1,10 @@
+'use client';
+
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { 
-  isConnected, 
-  getPublicKey, 
-  signTransaction 
+import {
+  isConnected,
+  requestAccess,
+  signTransaction
 } from '@stellar/freighter-api';
 import { 
   nativeToScVal, 
@@ -159,17 +161,21 @@ export const SorobanProvider: React.FC<{ children: React.ReactNode }> = ({ child
     setIsConnecting(true);
     setError(null);
     try {
-      const connected = await isConnected();
-      if (!connected) {
+      const connection = await isConnected();
+      if (connection.error || !connection.isConnected) {
         throw new Error('Freighter wallet extension is not installed or enabled.');
       }
-      
-      const pubKey = await getPublicKey();
-      if (!pubKey) {
+
+      // Prompts the user to grant this site access, then returns their address
+      const access = await requestAccess();
+      if (access.error) {
+        throw new Error(access.error.message);
+      }
+      if (!access.address) {
         throw new Error('Failed to retrieve public address from Freighter. Please log in.');
       }
-      
-      setPublicKey(pubKey);
+
+      setPublicKey(access.address);
     } catch (err: any) {
       console.error('Wallet connection failed:', err);
       setError(err.message || 'Wallet connection failed');
@@ -207,12 +213,16 @@ export const SorobanProvider: React.FC<{ children: React.ReactNode }> = ({ child
       const rawTxXdr = await prepareContractCall(publicKey, CONTRACT_ID, method, args);
       
       // 2. Sign the transaction via Freighter
-      const signedTxXdr = await signTransaction(rawTxXdr, {
+      const signed = await signTransaction(rawTxXdr, {
         networkPassphrase: NETWORK_PASSPHRASE,
+        address: publicKey,
       });
+      if (signed.error) {
+        throw new Error(signed.error.message);
+      }
 
       // 3. Submit transaction and poll for completion
-      const txHash = await submitTransaction(signedTxXdr);
+      const txHash = await submitTransaction(signed.signedTxXdr);
 
       setTxResult({
         success: true,
@@ -252,7 +262,7 @@ export const SorobanProvider: React.FC<{ children: React.ReactNode }> = ({ child
     await executeTransaction('withdraw_margin', args);
   };
 
-  const openPosition = async (size: number, isLong: bool) => {
+  const openPosition = async (size: number, isLong: boolean) => {
     const rawSize = BigInt(Math.floor(size * SCALE));
     const args = [
       nativeToScVal(publicKey, { type: 'address' }),
