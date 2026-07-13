@@ -29,6 +29,9 @@ mod vamm;
 #[cfg(test)]
 mod test;
 
+#[cfg(test)]
+mod fuzz;
+
 use errors::Error;
 use storage::{Config, Position, BPS_DENOM};
 use vamm::{fp_div, mul_div_floor, swap};
