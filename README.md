@@ -144,7 +144,27 @@ Required environment variables (see [`.env.local.example`](frontend/.env.local.e
 | `NEXT_PUBLIC_NETWORK_PASSPHRASE` | Network passphrase (mismatch detection) |
 | `NEXT_PUBLIC_EXPLORER_URL` | Explorer base (e.g. stellar.expert testnet) |
 
-### 3. Keepers (optional, testnet)
+### 3. TypeScript contract bindings
+
+Type-safe client bindings generated directly from the deployed contract spec live
+in [`frontend/packages/apex-futures`](frontend/packages/apex-futures). They are
+committed as source; build them (or regenerate against a new deployment) with:
+
+```bash
+# Build the committed bindings package
+cd frontend/packages/apex-futures && npm install && npm run build
+
+# Or regenerate from a (re)deployed contract
+stellar contract bindings typescript \
+  --network testnet --contract-id <CONTRACT_ID> \
+  --output-dir frontend/packages/apex-futures --overwrite
+```
+
+The app currently drives transactions through `src/lib/contract.ts` (a hand-typed
+client mirroring the same interface and error codes); the generated package is the
+canonical, spec-derived source of truth and can progressively replace it.
+
+### 4. Keepers (optional, testnet)
 
 Reference oracle feeder and liquidation keeper scripts live in
 [`scripts/`](scripts/README.md) — wire the feeder to your real GRC aggregation
