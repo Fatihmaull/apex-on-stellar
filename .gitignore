@@ -1,12 +1,19 @@
-# Rust
+# Rust / Soroban
 /target/
+/contracts/target/
+**/*.rs.bk
+*.wasm
+# Auto-generated Soroban test snapshots
+**/test_snapshots/
 
 # Node / Next.js
 /frontend/node_modules/
 /frontend/.next/
 /frontend/out/
 /frontend/build/
-/frontend/.env*.local
+*.tsbuildinfo
+.env
+.env*.local
 
 # IDEs & System
 .idea/

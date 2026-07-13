@@ -1,63 +1,67 @@
-use soroban_sdk::{token, Address, Env};
-use crate::storage::{
-    get_margin_account, set_margin_account, get_position, remove_position,
-    get_usdc_token, set_vamm_reserves
-};
-use crate::vamm::{get_position_value, calculate_pnl, swap};
-use crate::margin::is_liquidatable;
+use soroban_sdk::{panic_with_error, token, Address, Env};
 
-/// Liquidates an underwater position (health factor < 1.0).
-/// - `liquidator`: The address initiating the liquidation.
-/// - `user`: The address of the position owner.
-pub fn liquidate_position(env: &Env, liquidator: &Address, user: &Address) {
+use crate::errors::Error;
+use crate::events;
+use crate::funding;
+use crate::margin;
+use crate::oracle;
+use crate::storage::{self, BPS_DENOM, SCALE};
+use crate::vamm;
+
+/// Force-close an underwater position (health factor < 1.0 at the fresh index).
+///
+/// Security-critical choices:
+/// - Eligibility is judged on the *fresh oracle index price*, not the vAMM mark,
+///   so an attacker cannot swing the mark to trigger (or dodge) liquidations.
+/// - Realized settlement flows through `settle_close`, preserving the solvency
+///   invariant; the 5% penalty is split explicitly between liquidator reward and
+///   the insurance fund.
+pub fn liquidate(env: &Env, liquidator: &Address, user: &Address) {
     liquidator.require_auth();
 
-    // Verify the position is indeed liquidatable
-    assert!(is_liquidatable(env, user), "position is not liquidatable");
-
-    let position = get_position(env, user);
-    assert!(position.size != 0, "no active position to liquidate");
-
-    // 1. Calculate exit value and PnL
-    let position_value = get_position_value(env, &position);
-    let pnl = calculate_pnl(&position, position_value);
-    
-    // Position Equity = Margin Allocated + PnL
-    let equity = position.margin_allocated + pnl;
-
-    // 2. Calculate the 5% slashing penalty from the position's current value
-    let penalty = (position_value * 500) / 10000; // 5% = 500 bps
-    
-    // Ensure we don't slash more than the remaining equity
-    let actual_slashed = if penalty > equity { equity } else { penalty };
-    
-    // Liquidator bounty: 50% of the slashed penalty
-    let liquidator_bounty = actual_slashed / 2;
-    
-    // Protocol share: remaining 50% stays in the contract
-    let _protocol_share = actual_slashed - liquidator_bounty;
-
-    // 3. Close the position in the vAMM (update the reserves)
-    let size_abs = position.size.abs();
-    let is_long = position.size > 0;
-    // Closing swap: if user was long, we sell (is_long=false). If short, we buy (is_long=true).
-    let (_, new_base, new_quote) = swap(env, size_abs, !is_long);
-    set_vamm_reserves(env, new_base, new_quote);
-
-    // 4. Pay the liquidator bounty in USDC
-    let usdc_addr = get_usdc_token(env).expect("USDC token not set");
-    if liquidator_bounty > 0 {
-        let usdc_client = token::Client::new(env, &usdc_addr);
-        usdc_client.transfer(&env.current_contract_address(), liquidator, &liquidator_bounty);
+    let price = oracle::get_fresh_price(env);
+    let pos = storage::get_position(env, user);
+    if pos.size == 0 {
+        panic_with_error!(env, Error::NoPosition);
+    }
+    // Gate on index-priced health factor.
+    if margin::health_factor_at(env, &pos, price) >= SCALE {
+        panic_with_error!(env, Error::NotLiquidatable);
     }
 
-    // 5. Return remaining collateral (equity - actual_slashed) to the user's free margin
-    let remaining_collateral = equity - actual_slashed;
-    if remaining_collateral > 0 {
-        let current_free_margin = get_margin_account(env, user);
-        set_margin_account(env, user, current_free_margin + remaining_collateral);
+    let cfg = storage::get_config(env);
+
+    // 1. Realize the position against the vAMM (actual execution price).
+    let size_abs = pos.size.abs();
+    let is_long = pos.size > 0;
+    let (exit_value, new_base, new_quote) = vamm::swap(env, size_abs, !is_long);
+    let pnl = vamm::calculate_pnl(env, &pos, exit_value);
+    let funding_owed = funding::pending_funding(env, &pos);
+
+    // 2. Settle PnL/funding into a notional "credited" equity (no trading fee on
+    //    liquidations — the penalty replaces it).
+    let credited = margin::settle_close(env, pos.margin_allocated, pnl, funding_owed, 0);
+
+    // 3. Apply the liquidation penalty and split it (reward vs. insurance).
+    let penalty = vamm::mul_div_floor(env, credited, cfg.liq_penalty_bps, BPS_DENOM);
+    let reward = vamm::mul_div_floor(env, penalty, cfg.liq_reward_bps, BPS_DENOM);
+    let user_return = credited - penalty;
+
+    // Move the penalty out of the user's claim; insurance keeps the protocol share.
+    storage::set_total_collateral(env, storage::get_total_collateral(env) - penalty);
+    storage::set_insurance_fund(env, storage::get_insurance_fund(env) + penalty - reward);
+
+    // 4. Effects: credit the user's remaining equity, update reserves, drop position.
+    storage::set_margin(env, user, storage::get_margin(env, user) + user_return);
+    storage::set_reserves(env, new_base, new_quote);
+    storage::remove_position(env, user);
+    storage::extend_instance(env);
+
+    // 5. Interaction: pay the liquidator's bounty in USDC.
+    if reward > 0 {
+        let usdc = storage::get_usdc_token(env);
+        token::Client::new(env, &usdc).transfer(&env.current_contract_address(), liquidator, &reward);
     }
 
-    // 6. Delete user's position record
-    remove_position(env, user);
+    events::liquidate(env, user, liquidator, penalty, reward, user_return);
 }

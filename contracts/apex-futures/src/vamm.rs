@@ -1,90 +1,108 @@
-use soroban_sdk::Env;
-use crate::storage::{get_vamm_reserves, Position};
+use soroban_sdk::{panic_with_error, Env};
 
-pub const SCALE: i128 = 10_000_000; // 7 decimals (matches USDC)
+use crate::errors::Error;
+use crate::storage::{get_reserves, Position, SCALE};
 
-/// Fixed-point multiplication: (a * b) / SCALE
-pub fn fp_mul(a: i128, b: i128) -> i128 {
-    a.checked_mul(b).unwrap() / SCALE
+// --- Overflow-safe fixed-point primitives ----------------------------------
+//
+// All operands here are non-negative unless noted. We use `checked_mul` on i128
+// and surface `MathOverflow` on overflow rather than silently wrapping. For the
+// realistic reserve/price magnitudes used by APEX (reserves ~1e13, prices ~1e8)
+// the intermediate products stay far below i128::MAX (~1.7e38), so overflow only
+// triggers on genuinely pathological inputs — which we correctly reject.
+
+/// floor(a * b / denom). Requires denom > 0.
+pub fn mul_div_floor(env: &Env, a: i128, b: i128, denom: i128) -> i128 {
+    if denom <= 0 {
+        panic_with_error!(env, Error::MathOverflow);
+    }
+    match a.checked_mul(b) {
+        Some(p) => p / denom,
+        None => panic_with_error!(env, Error::MathOverflow),
+    }
 }
 
-/// Fixed-point division: (a * SCALE) / b
-pub fn fp_div(a: i128, b: i128) -> i128 {
-    a.checked_mul(SCALE).unwrap() / b
+/// ceil(a * b / denom) for non-negative inputs. Requires denom > 0.
+pub fn mul_div_ceil(env: &Env, a: i128, b: i128, denom: i128) -> i128 {
+    if denom <= 0 {
+        panic_with_error!(env, Error::MathOverflow);
+    }
+    match a.checked_mul(b) {
+        Some(p) => {
+            // (p + denom - 1) / denom, guarding the addition too.
+            match p.checked_add(denom - 1) {
+                Some(n) => n / denom,
+                None => panic_with_error!(env, Error::MathOverflow),
+            }
+        }
+        None => panic_with_error!(env, Error::MathOverflow),
+    }
 }
 
-/// Get the current virtual mark price: y / x
+/// Fixed-point multiply: a * b / SCALE (floor).
+pub fn fp_mul(env: &Env, a: i128, b: i128) -> i128 {
+    mul_div_floor(env, a, b, SCALE)
+}
+
+/// Fixed-point divide: a * SCALE / b (floor).
+pub fn fp_div(env: &Env, a: i128, b: i128) -> i128 {
+    mul_div_floor(env, a, SCALE, b)
+}
+
+/// Current virtual mark price: quote / base (USDC per base unit, 7 dp).
 pub fn get_mark_price(env: &Env) -> i128 {
-    let (base_reserve, quote_reserve) = get_vamm_reserves(env);
-    if base_reserve == 0 {
+    let (base, quote) = get_reserves(env);
+    if base == 0 {
         return 0;
     }
-    fp_div(quote_reserve, base_reserve)
+    fp_div(env, quote, base)
 }
 
-/// Simulates or executes a swap on the vAMM.
-/// - `size`: Quantity of virtual base asset (compute hours) to trade (scaled by SCALE). Must be positive.
-/// - `is_long`: True if buying base asset (Long), False if selling base asset (Short).
-/// Returns `(quote_amount, new_base_reserve, new_quote_reserve)` where `quote_amount` is the total entry/exit value in USDC.
-pub fn swap(
-    env: &Env,
-    size: i128,
-    is_long: bool,
-) -> (i128, i128, i128) {
-    let (base_reserve, quote_reserve) = get_vamm_reserves(env);
-    assert!(size > 0, "swap size must be positive");
-    assert!(base_reserve > 0 && quote_reserve > 0, "vAMM not initialized");
+/// Simulate/execute a constant-product (x*y=k) swap on the vAMM.
+///
+/// - `size`: positive quantity of virtual base units traded.
+/// - `is_long`: true = buy base (long/close-short), false = sell base (short/close-long).
+///
+/// Rounding always favors the protocol: buyers pay the ceiling, sellers receive
+/// the floor. Returns `(quote_amount, new_base, new_quote)` where `quote_amount`
+/// is the notional (USDC, 7 dp) moved by the trade.
+pub fn swap(env: &Env, size: i128, is_long: bool) -> (i128, i128, i128) {
+    let (base, quote) = get_reserves(env);
+    if size <= 0 {
+        panic_with_error!(env, Error::InvalidAmount);
+    }
+    if base <= 0 || quote <= 0 {
+        panic_with_error!(env, Error::NotInitialized);
+    }
 
     if is_long {
-        // User buys base asset (size) -> base reserve decreases by size
-        assert!(base_reserve > size, "insufficient base reserve liquidity");
-        let new_base_reserve = base_reserve - size;
-        // y_new = (x * y) / x_new
-        let new_quote_reserve = (base_reserve * quote_reserve) / new_base_reserve;
-        // quote_amount = y_new - y
-        let quote_amount = new_quote_reserve - quote_reserve;
-        (quote_amount, new_base_reserve, new_quote_reserve)
+        // Buying base: base reserve shrinks. Must retain strictly positive liquidity.
+        if base <= size {
+            panic_with_error!(env, Error::InsufficientLiquidity);
+        }
+        let new_base = base - size;
+        // y_new = ceil(x*y / x_new) => buyer pays the rounded-up cost.
+        let new_quote = mul_div_ceil(env, base, quote, new_base);
+        let quote_amount = new_quote - quote;
+        (quote_amount, new_base, new_quote)
     } else {
-        // User sells base asset (size) -> base reserve increases by size
-        let new_base_reserve = base_reserve + size;
-        // y_new = (x * y) / x_new
-        let new_quote_reserve = (base_reserve * quote_reserve) / new_base_reserve;
-        // quote_amount = y - y_new
-        let quote_amount = quote_reserve - new_quote_reserve;
-        (quote_amount, new_base_reserve, new_quote_reserve)
+        // Selling base: base reserve grows.
+        let new_base = base + size;
+        // y_new = floor(x*y / x_new) => seller receives the rounded-down proceeds.
+        let new_quote = mul_div_floor(env, base, quote, new_base);
+        let quote_amount = quote - new_quote;
+        (quote_amount, new_base, new_quote)
     }
 }
 
-/// Calculates the current exit value in USDC (7 decimals) for a given position.
-/// - To close a Long position: we sell the base asset size back to the vAMM.
-/// - To close a Short position: we buy the base asset size back from the vAMM.
-pub fn get_position_value(env: &Env, position: &Position) -> i128 {
-    if position.size == 0 {
-        return 0;
-    }
-    
-    let is_long = position.size > 0;
-    let size_abs = position.size.abs();
-    
-    // Simulate the swap to close. 
-    // If we are Long, we sell the base asset (is_long = false for closing swap).
-    // If we are Short, we buy the base asset (is_long = true for closing swap).
-    let (quote_amount, _, _) = swap(env, size_abs, !is_long);
-    quote_amount
-}
-
-/// Calculates the PnL of a position.
-/// - `position`: The user's active position structure.
-/// - `current_value`: The current exit value of the position in USDC (from `get_position_value`).
-/// Returns PnL in USDC (7 decimals, can be negative for losses).
-pub fn calculate_pnl(position: &Position, current_value: i128) -> i128 {
-    let entry_value = fp_mul(position.size.abs(), position.entry_price);
+/// Realized PnL (USDC, 7 dp, signed) of `position` given a realized `exit_value`.
+/// Long: exit - entry_notional. Short: entry_notional - exit.
+pub fn calculate_pnl(env: &Env, position: &Position, exit_value: i128) -> i128 {
+    let entry_notional = fp_mul(env, position.size.abs(), position.entry_price);
     if position.size > 0 {
-        // Long PnL: Exit Value - Entry Value
-        current_value - entry_value
+        exit_value - entry_notional
     } else if position.size < 0 {
-        // Short PnL: Entry Value - Exit Value
-        entry_value - current_value
+        entry_notional - exit_value
     } else {
         0
     }
