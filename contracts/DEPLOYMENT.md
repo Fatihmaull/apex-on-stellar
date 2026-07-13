@@ -43,7 +43,7 @@ in the constructor at deploy time (closes the init front-running window).
 | `admin`          | `deployer` address                 | |
 | `pauser`         | `pauser` address                   | |
 | `fee_collector`  | `fee-collect` address              | |
-| `usdc`           | USDC SAC contract id               | Circle USDC SAC on the target network |
+| `usdc`           | USDC SAC contract id               | Testnet: our own issued test USDC (see `deployments.md`). Mainnet: Circle USDC SAC. |
 | `oracle_updater` | `oracle` address                   | |
 | `init_base`      | `10000000000000` (1,000,000 × 1e7) | virtual base reserve |
 | `init_quote`     | `50000000000000` (5,000,000 × 1e7) | implies 5.0 USDC start price |
@@ -86,9 +86,14 @@ stellar contract deploy \
   --oracle_updater <ORACLE_G...> \
   --init_base 10000000000000 \
   --init_quote 50000000000000 \
-  --config '{ "init_margin_bps":"2000","maint_margin_bps":"1000","trading_fee_bps":"10","liq_penalty_bps":"500","liq_reward_bps":"5000","funding_interval":"3600","funding_admin_cut_bps":"1000","max_funding_bps":"100","oracle_max_deviation_bps":"2000","oracle_staleness":"3600","min_position_size":"10000000" }' \
+  --config '{ "init_margin_bps":"2000","maint_margin_bps":"1000","trading_fee_bps":"10","liq_penalty_bps":"500","liq_reward_bps":"5000","funding_interval":3600,"funding_admin_cut_bps":"1000","max_funding_bps":"100","oracle_max_deviation_bps":"2000","oracle_staleness":3600,"min_position_size":"10000000" }' \
   --timelock_delay 86400
 ```
+
+> **JSON types matter.** `funding_interval` and `oracle_staleness` are `u64` and
+> must be passed as JSON **numbers**; every other `Config` field is `i128` and
+> must be a JSON **string**. Quoting those two `u64`s makes the CLI fail at
+> argument parsing (`unknown variant '3600'`) before a transaction is ever built.
 
 ### Governance operations (post-deploy)
 
@@ -122,16 +127,22 @@ Record the returned **contract id** into `frontend/.env.local` as
 3. **Run a liquidation keeper** polling `get_health_factor` / `liquidate`.
 4. Smoke-test: `deposit_margin → open_position → update_oracle → close_position`.
 
-## 5. Fuzzing / property testing (pre-mainnet)
+## 5. Fuzzing / property testing
 
-The in-tree `test_solvency_invariant_across_sequence` exercises the
-`vault == total_collateral + fee_vault + insurance_fund` invariant across a mixed
-operation sequence. Before mainnet, extend this with randomized sequences (e.g. a
-`proptest`/`cargo-fuzz` harness driving deposit/open/close/liquidate/funding with
-random sizes, sides and prices) and assert after every step:
-- solvency invariant holds,
-- `insurance_fund >= 0`,
-- constant-product `k` never decreases from rounding.
+Already in-tree (`src/fuzz.rs`, `proptest`): randomized sequences of deposit /
+withdraw / open / close / liquidate / oracle / funding / time-advance, asserting
+after **every** step that
+
+- solvency holds — `vault == total_collateral + fee_vault + insurance_fund`,
+- `insurance_fund >= 0` and `total_collateral >= 0`,
+- neither vAMM reserve is ever drained to `<= 0`.
+
+Note `k = base * quote` is deliberately **not** asserted monotonic: `vamm::swap`
+rounds directionally against the trader (ceil on buys, floor on sells), so `k`
+drifts both ways while always pricing in the pool's favour.
+
+Before mainnet, raise `ProptestConfig::cases` well above the current 40 and add a
+`cargo-fuzz` target on the swap/settlement math.
 
 ## 6. Mainnet gates (do not skip)
 
@@ -139,6 +150,10 @@ random sizes, sides and prices) and assert after every step:
 - [ ] `admin` and `oracle_updater` migrated to multisig; single keys revoked.
 - [ ] Insurance fund seeded to a policy minimum.
 - [ ] `oracle_max_deviation_bps` / `oracle_staleness` tuned to real feed cadence.
+- [ ] `timelock_delay` set to 24–48h (it is **not** re-applied by `upgrade` — an
+      in-place upgrade keeps the value already in storage).
 - [ ] Pause runbook rehearsed; `pause`/`unpause` authorities confirmed.
-- [ ] Upgrade path tested on testnet via `upgrade(new_wasm_hash)`.
+- [ ] Upgrade path rehearsed on testnet end-to-end:
+      `propose_upgrade` → wait `timelock_delay` → `execute_upgrade`
+      (and `cancel_upgrade` aborts a pending one).
 - [ ] Monitoring on emitted events (`open`/`close`/`liquidate`/`funding`/`oracle`).
