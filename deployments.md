@@ -5,19 +5,24 @@ live in the local Stellar CLI keystore (`~/.config/stellar/identity/*.toml`).
 
 ---
 
-## Testnet — 2026-07-13
+## Testnet — 2026-07-13 (current · Phase D timelock build)
 
 Network: `Test SDF Network ; September 2015` · RPC `https://soroban-testnet.stellar.org`
+
+This deployment is the `main` build **with timelocked governance** (new constructor
+`timelock_delay`, `propose_*`/`execute_*`/`cancel_*` entrypoints). It **supersedes**
+the initial Phase B contract `CDESAH7V…FOATZSY` (kept below for history).
 
 ### Contracts
 
 | Contract | ID |
 |---|---|
-| **APEX Futures** | `CDESAH7V5QCU42CQXS2QZTDOOTNHEISLYZ7XPEYJVTSLIN3NQFOATZSY` |
+| **APEX Futures** | `CDVCBYSD3D2AMH3EDCSCUONVREWDWIOEDJFZSWKQIJNH52TP6S7VDKCC` |
 | Test USDC (SAC) | `CBTXNIAJASVEWFR7QRYGQXIMBVC2GB4FXZEICUCXCRMCO6UM4K3RZEDL` |
 
-- Contract: https://stellar.expert/explorer/testnet/contract/CDESAH7V5QCU42CQXS2QZTDOOTNHEISLYZ7XPEYJVTSLIN3NQFOATZSY
-- WASM hash: `74551fa9ff06c3fd5b35edc8dd780d93b954285dd6d27ae99c3d45c083a8a58e`
+- Contract: https://stellar.expert/explorer/testnet/contract/CDVCBYSD3D2AMH3EDCSCUONVREWDWIOEDJFZSWKQIJNH52TP6S7VDKCC
+- WASM hash: `61d7f13d5fcb5fae33e1df5478715b5f16793b50abb9b49815ec33ab051fb743`
+- Superseded contract (Phase B, no timelock): `CDESAH7V5QCU42CQXS2QZTDOOTNHEISLYZ7XPEYJVTSLIN3NQFOATZSY`
 
 > **Test USDC** is a controlled asset issued by an identity we own (below) so we
 > can mint to test accounts. It is **not** Circle USDC. Holders need a trustline
@@ -51,6 +56,7 @@ Network: `Test SDF Network ; September 2015` · RPC `https://soroban-testnet.ste
 | oracle_max_deviation_bps | 5000 | **demo-loose** (50%; tighten for real markets) |
 | oracle_staleness | 86400 | **demo-loose** (24h; tighten for real markets) |
 | min_position_size | 10000000 | 1.0 base unit |
+| **timelock_delay** | 300 | 5 min governance delay (demo-short; use 24–48h on mainnet) |
 
 > Oracle bands and staleness are intentionally loose so the in-app price
 > simulator can drive PnL/liquidations during evaluation. Use the tighter values
@@ -61,18 +67,21 @@ Network: `Test SDF Network ; September 2015` · RPC `https://soroban-testnet.ste
 - Insurance fund seeded: **10,000 USDC**.
 - 100,000 test USDC minted to the deployer.
 
-### On-chain verification (2026-07-13)
+### On-chain verification (2026-07-13, current contract)
 
-Full lifecycle exercised against the live contract:
+Verified live against `CDVCBYSD…DKCC`:
 
 | Step | Result |
 |---|---|
-| `deposit_margin` (2,000 USDC) | ✅ free margin credited |
-| `open_position` (long 100 V-GPU) | ✅ margin locked, 0.1% fee to vault, mark moved, `open` event |
-| `update_oracle` by `apex-oracle` | ✅ index 5.0 → 6.0 |
-| `update_oracle` by unauthorized key | ✅ rejected `Error(Contract, #3)` Unauthorized |
-| `close_position` | ✅ settled; round trip cost ≈ fees only; position zeroed |
-| Solvency | ✅ vault backs total_collateral + fee_vault + insurance_fund |
+| Constructor state | ✅ `get_timelock_delay` = 300, mark = index = 5.0, `is_paused` = false |
+| `seed_insurance` (10,000 USDC) | ✅ `insurance_fund` = 100000000000, `transfer`+`insurance` events |
+| `update_oracle` by `apex-oracle` | ✅ index 5.0 → 5.5 → 5.0, `oracle` event |
+| Timelock: `propose_upgrade` (admin) | ✅ `get_pending_upgrade` returns hash + eta |
+| Timelock: `cancel_upgrade` (admin) | ✅ `get_pending_upgrade` = null |
+
+The full trading lifecycle (deposit → open → close → liquidate) was validated on
+the predecessor contract in Phase B and is unchanged; the delta here is the
+timelocked governance, verified above.
 
 ### Frontend wiring
 
