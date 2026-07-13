@@ -13,5 +13,7 @@ soroban-sdk = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
+# Property-based / fuzz testing of protocol invariants (see src/fuzz.rs).
+proptest = "1"
 
 # Release profiles are inherited from the workspace root Cargo.toml.
