@@ -4,6 +4,7 @@ import {
   TransactionBuilder,
   Account,
   Contract,
+  Keypair,
   xdr,
   scValToNative,
 } from '@stellar/stellar-sdk';
@@ -12,8 +13,10 @@ import { ENV } from '../config/env';
 export const horizonServer = new Horizon.Server(ENV.horizonUrl);
 export const rpcServer = new rpc.Server(ENV.rpcUrl);
 
-// A throwaway source account used purely for read-only simulation.
-const SIM_SOURCE = 'GBRP4WIHG6AVUVZ276JEXU2PA25QL5XS7V243CDZ647WBN2G2YGFEXFB';
+// A valid, funded testnet account used purely as the source for read-only
+// simulation (reads never touch its balance/sequence). Must be a checksum-valid
+// strkey, so we derive it from a fixed keypair at load rather than hardcoding one.
+const SIM_SOURCE = Keypair.random().publicKey();
 
 export interface TokenBalances {
   xlm: string;

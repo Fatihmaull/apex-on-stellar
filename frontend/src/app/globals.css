@@ -13,20 +13,21 @@
   }
 
   body {
-    @apply bg-ink-900 text-white/90 font-sans antialiased;
-    background-image:
-      radial-gradient(60rem 60rem at 80% -10%, rgba(255, 106, 43, 0.06), transparent 60%),
-      radial-gradient(50rem 50rem at -10% 20%, rgba(245, 166, 35, 0.04), transparent 55%);
+    @apply bg-ink-900 text-fg font-sans antialiased;
     min-height: 100vh;
   }
 
-  /* Subtle scrollbar to fit the terminal aesthetic */
+  ::selection {
+    background: #f3f3f3;
+    color: #000;
+  }
+
   ::-webkit-scrollbar {
-    width: 10px;
-    height: 10px;
+    width: 9px;
+    height: 9px;
   }
   ::-webkit-scrollbar-thumb {
-    @apply bg-ink-500 rounded-pill;
+    @apply bg-ink-500;
   }
   ::-webkit-scrollbar-track {
     @apply bg-transparent;
@@ -34,26 +35,46 @@
 }
 
 @layer components {
-  /* Uppercase mono micro-label — the signature ornn-style eyebrow text. */
+  /* Uppercase mono micro-label — the signature ornn eyebrow. */
   .label {
-    @apply font-mono text-label uppercase text-muted;
+    @apply font-mono text-label uppercase text-fg-faint;
   }
 
-  /* Hairline-bordered raised surface. */
+  /* Hairline-bordered surface. */
   .surface {
-    @apply bg-ink-700 border border-line rounded-card shadow-card;
+    @apply bg-ink-700 border border-line rounded-card;
   }
 
-  /* Faint grid backdrop used behind hero / terminal sections. */
-  .grid-bg {
-    background-image:
-      linear-gradient(to right, rgba(255, 255, 255, 0.03) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
-    background-size: 44px 44px;
-    mask-image: radial-gradient(ellipse 100% 60% at 50% 0%, black 40%, transparent 100%);
+  /* Light "paper" section (ornn alternates black ↔ #F3F3F3). */
+  .paper-section {
+    @apply bg-paper text-paper-ink;
+  }
+  .paper-section .label {
+    color: rgba(0, 0, 0, 0.45);
   }
 
   .tabular {
     font-variant-numeric: tabular-nums;
+  }
+
+  /* Editorial link with an underline that reveals on hover. */
+  .link-reveal {
+    @apply relative inline-block text-fg;
+  }
+  .link-reveal::after {
+    content: '';
+    @apply absolute left-0 -bottom-0.5 h-px w-full origin-right scale-x-0 bg-current transition-transform duration-300;
+  }
+  .link-reveal:hover::after {
+    @apply origin-left scale-x-100;
+  }
+
+  /* Faint grid backdrop used behind the hero. */
+  .grid-bg {
+    background-image:
+      linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+    background-size: 56px 56px;
+    mask-image: radial-gradient(ellipse 90% 70% at 50% 0%, black 30%, transparent 100%);
   }
 }
