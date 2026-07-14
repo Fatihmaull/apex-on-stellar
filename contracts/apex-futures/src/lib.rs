@@ -28,6 +28,7 @@ mod funding;
 mod liquidation;
 mod margin;
 mod oracle;
+mod sep40;
 mod storage;
 mod vamm;
 
@@ -38,6 +39,7 @@ mod test;
 mod fuzz;
 
 use errors::Error;
+use sep40::{Asset, PriceData};
 use storage::{Config, Position, PricePoint, BPS_DENOM};
 use vamm::{fp_div, mul_div_floor, swap};
 
@@ -424,6 +426,58 @@ impl ApexFuturesContract {
     /// Retained index observations backing the TWAP (oldest first, max 24).
     pub fn get_price_history(env: Env) -> Vec<PricePoint> {
         storage::get_price_history(&env)
+    }
+
+    // ----------------------------------------------------------------------
+    // SEP-40 price feed
+    //
+    // APEX prices something no oracle on Stellar does — an hour of APAC GPU
+    // compute. Behind SEP-40, any protocol already reading a standard feed can
+    // consume it by swapping the contract address, with no integration code.
+    // Read-only; see `sep40.rs`.
+    // ----------------------------------------------------------------------
+
+    /// Denomination every price is quoted in: the collateral asset (USDC).
+    pub fn base(env: Env) -> Asset {
+        sep40::base(&env)
+    }
+
+    /// Assets this feed quotes. APEX runs one market, so: `Other("ACPI")`.
+    pub fn assets(env: Env) -> Vec<Asset> {
+        sep40::assets(&env)
+    }
+
+    /// Fixed-point precision of every reported price (7).
+    pub fn decimals(_env: Env) -> u32 {
+        sep40::DECIMALS
+    }
+
+    /// Advertised publish cadence in seconds. Not enforced on-chain — judge
+    /// freshness from `lastprice().timestamp`, not from this.
+    pub fn resolution(_env: Env) -> u32 {
+        sep40::RESOLUTION
+    }
+
+    /// Latest index price. `None` for an unknown asset or before the first push.
+    pub fn lastprice(env: Env, asset: Asset) -> Option<PriceData> {
+        sep40::lastprice(&env, &asset)
+    }
+
+    /// The last `records` observations, newest first, bounded by what is retained.
+    pub fn prices(env: Env, asset: Asset, records: u32) -> Option<Vec<PriceData>> {
+        sep40::prices(&env, &asset, records)
+    }
+
+    /// The price that prevailed at `timestamp`. Any timestamp is accepted.
+    pub fn price(env: Env, asset: Asset, timestamp: u64) -> Option<PriceData> {
+        sep40::price(&env, &asset, timestamp)
+    }
+
+    /// Time-weighted average across the last `records` observations. A Reflector
+    /// extension rather than SEP-40 proper — and the one that matters, since
+    /// consuming a raw last price with no smoothing is what cost Blend ~$10.8M.
+    pub fn twap(env: Env, asset: Asset, records: u32) -> Option<i128> {
+        sep40::twap(&env, &asset, records)
     }
 
     pub fn get_health_factor(env: Env, user: Address) -> i128 {

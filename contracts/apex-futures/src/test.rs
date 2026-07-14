@@ -2,11 +2,13 @@
 extern crate std;
 
 use soroban_sdk::{
+    symbol_short,
     testutils::{Address as _, Ledger as _},
-    token, Address, Env,
+    token, vec, Address, Env,
 };
 
 use crate::errors::Error;
+use crate::sep40::Asset;
 use crate::storage::{Config, SCALE};
 use crate::{ApexFuturesContract, ApexFuturesContractClient};
 
@@ -754,4 +756,96 @@ fn test_twap_window_is_bounded_and_admin_only() {
     // And it can always be switched back off.
     r.client.set_twap_window(&r.admin, &0);
     assert_eq!(r.client.get_twap_window(), 0);
+}
+
+// --- SEP-40 price feed -----------------------------------------------------
+
+#[test]
+fn test_sep40_metadata() {
+    let r = setup();
+    let acpi = Asset::Other(symbol_short!("ACPI"));
+
+    assert_eq!(r.client.assets(), vec![&r.env, acpi]);
+    assert_eq!(r.client.decimals(), 7, "prices are 7-dp fixed point");
+    assert_eq!(r.client.resolution(), 300);
+
+    // Everything is quoted in the collateral asset.
+    match r.client.base() {
+        Asset::Stellar(addr) => assert_eq!(addr, r.usdc.address),
+        _ => panic!("base must be the USDC SAC"),
+    }
+}
+
+#[test]
+fn test_sep40_lastprice_and_prices() {
+    let r = setup();
+    let acpi = Asset::Other(symbol_short!("ACPI"));
+    r.env.ledger().set_timestamp(1_000);
+
+    r.client.update_oracle(&r.oracle_updater, &(5 * SCALE));
+    r.env.ledger().set_timestamp(2_000);
+    r.client.update_oracle(&r.oracle_updater, &(6 * SCALE));
+
+    let last = r.client.lastprice(&acpi).unwrap();
+    assert_eq!(last.price, 6 * SCALE);
+    assert_eq!(last.timestamp, 2_000);
+
+    // Newest first, as SEP-40 consumers expect.
+    let hist = r.client.prices(&acpi, &2).unwrap();
+    assert_eq!(hist.len(), 2);
+    assert_eq!(hist.get(0).unwrap().price, 6 * SCALE);
+    assert_eq!(hist.get(1).unwrap().price, 5 * SCALE);
+
+    // Asking for more than we retain yields what we have, rather than failing.
+    assert_eq!(r.client.prices(&acpi, &100).unwrap().len(), 2);
+}
+
+#[test]
+fn test_sep40_historical_price_lookup() {
+    let r = setup();
+    let acpi = Asset::Other(symbol_short!("ACPI"));
+    r.env.ledger().set_timestamp(1_000);
+    r.client.update_oracle(&r.oracle_updater, &(5 * SCALE));
+    r.env.ledger().set_timestamp(2_000);
+    r.client.update_oracle(&r.oracle_updater, &(6 * SCALE));
+
+    // The price that *prevailed* at a moment, not the nearest sample.
+    assert_eq!(r.client.price(&acpi, &1_500).unwrap().price, 5 * SCALE);
+    assert_eq!(r.client.price(&acpi, &2_000).unwrap().price, 6 * SCALE);
+    assert_eq!(r.client.price(&acpi, &9_999).unwrap().price, 6 * SCALE);
+
+    // Before anything we retain: no answer, rather than a wrong one.
+    assert_eq!(r.client.price(&acpi, &500), None);
+}
+
+#[test]
+fn test_sep40_rejects_unknown_assets() {
+    let r = setup();
+    r.client.update_oracle(&r.oracle_updater, &(5 * SCALE));
+
+    // A consumer pointed at the wrong asset must get None, never ACPI's price
+    // under another name.
+    let btc = Asset::Other(symbol_short!("BTC"));
+    assert_eq!(r.client.lastprice(&btc), None);
+    assert_eq!(r.client.prices(&btc, &5), None);
+    assert_eq!(r.client.price(&btc, &1_000), None);
+    assert_eq!(r.client.twap(&btc, &5), None);
+}
+
+/// The Reflector-compatible extension, and the reason it exists: a consumer that
+/// reads `twap()` instead of `lastprice()` is not fooled by a flash crash.
+#[test]
+fn test_sep40_twap_matches_the_risk_price() {
+    let r = setup();
+    let acpi = Asset::Other(symbol_short!("ACPI"));
+    r.env.ledger().set_timestamp(HOUR);
+
+    r.client.update_oracle(&r.oracle_updater, &(5 * SCALE));
+    r.env.ledger().set_timestamp(2 * HOUR);
+    r.client.update_oracle(&r.oracle_updater, &(3 * SCALE)); // flash crash
+
+    // A naive consumer reading the last price sees the crash…
+    assert_eq!(r.client.lastprice(&acpi).unwrap().price, 3 * SCALE);
+    // …while one reading the TWAP does not.
+    assert_eq!(r.client.twap(&acpi, &2).unwrap(), 5 * SCALE);
 }
