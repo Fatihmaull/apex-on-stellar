@@ -76,6 +76,31 @@ export async function buildContractCall(
   return rpc.assembleTransaction(tx, sim).build().toXDR();
 }
 
+/**
+ * Read a transaction's status straight off the wire, without letting the SDK
+ * decode it.
+ *
+ * `rpcServer.getTransaction()` parses `resultMetaXdr`. The SDK understands
+ * TransactionMeta up to v3, but testnet runs protocol 27 and returns **v4**, so
+ * the parse throws `Bad union switch: 4` — for a transaction that actually
+ * *succeeded*. The UI then reports a failure for a trade that settled on-chain.
+ *
+ * `status` is a plain JSON field, so ask for it directly and never touch the
+ * meta. Remove this once the SDK is upgraded past protocol 23.
+ */
+async function pollStatus(hash: string): Promise<string> {
+  const res = await fetch(ENV.rpcUrl, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'getTransaction', params: { hash } }),
+  });
+  const json = await res.json();
+  if (json.error) {
+    throw new Error(`RPC error: ${json.error.message ?? JSON.stringify(json.error)}`);
+  }
+  return json.result?.status ?? 'NOT_FOUND';
+}
+
 /** Submit a signed XDR and poll to completion; returns the tx hash. */
 export async function submitSigned(signedXdr: string): Promise<string> {
   const tx = TransactionBuilder.fromXDR(signedXdr, ENV.networkPassphrase);
@@ -88,9 +113,9 @@ export async function submitSigned(signedXdr: string): Promise<string> {
   const hash = sent.hash;
   for (let i = 0; i < 15; i++) {
     await new Promise((r) => setTimeout(r, 1500));
-    const res = await rpcServer.getTransaction(hash);
-    if (res.status === 'SUCCESS') return hash;
-    if (res.status === 'FAILED') {
+    const status = await pollStatus(hash);
+    if (status === 'SUCCESS') return hash;
+    if (status === 'FAILED') {
       throw new Error('Transaction failed during execution.');
     }
   }
