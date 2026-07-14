@@ -116,10 +116,7 @@ pub fn buy_cu(env: &Env, buyer: &Address, series_id: u64, amount: i128, max_cost
         .unwrap_or_else(|| panic_with_error!(env, Error::ProviderNotFound));
     p.collateral += cost;
     storage::set_provider(env, &s.provider, &p);
-    storage::set_provider_collateral_total(
-        env,
-        storage::get_provider_collateral_total(env) + cost,
-    );
+    storage::set_provider_collateral_total(env, storage::get_provider_collateral_total(env) + cost);
 
     storage::set_inventory(env, series_id, inv - amount);
     // Transfer CU from contract inventory to buyer on the ledger.
@@ -180,7 +177,11 @@ pub fn sell_cu(env: &Env, seller: &Address, series_id: u64, amount: i128, min_pr
     let contract = env.current_contract_address();
     let cbal = storage::get_balance(env, series_id, &contract);
     storage::set_balance(env, series_id, &contract, cbal + amount);
-    storage::set_inventory(env, series_id, storage::get_inventory(env, series_id) + amount);
+    storage::set_inventory(
+        env,
+        series_id,
+        storage::get_inventory(env, series_id) + amount,
+    );
 
     storage::extend_instance(env);
     events::cu_sold(env, seller, series_id, amount, proceeds);

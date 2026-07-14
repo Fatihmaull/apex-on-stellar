@@ -17,22 +17,27 @@ export function TradePanel({ protocol, market }: { protocol: Protocol; market: M
   const { user, connected, busy, openPosition } = protocol;
   const [isLong, setIsLong] = useState(true);
   const [size, setSize] = useState('');
-  const [leverage, setLeverage] = useState(3);
 
   const mark = market?.markPrice ?? 0;
   const sizeNum = Number(size);
   const hasPosition = user.position.isOpen;
 
-  // Estimated notional & margin (approx; the contract prices exactly on-chain).
+  // The contract locks EXACTLY init_margin_bps of notional as margin, so leverage
+  // is fixed (leverage = BPS_DENOM / init_margin_bps). There is no per-order
+  // leverage input on-chain — showing a slider would misrepresent the position.
+  const initMarginBps = market?.initMarginBps ?? 2000;
+  const leverage = Math.round(10000 / initMarginBps); // e.g. 2000 => 5x
+  const initMarginPct = initMarginBps / 100; // e.g. 20%
+
+  // Estimated notional & margin — computed from the same on-chain ratio the
+  // contract applies, so the number the user sees matches what executes.
   const estimate = useMemo(() => {
     if (!sizeNum || !mark) return null;
     const notional = sizeNum * mark;
-    // Leverage is a UX proxy for required margin; the contract enforces exact
-    // init-margin bps on-chain at execution.
-    const requiredMargin = notional / leverage;
+    const requiredMargin = (notional * initMarginBps) / 10000;
     const fee = notional * 0.001;
     return { notional, requiredMargin, fee };
-  }, [sizeNum, mark, leverage]);
+  }, [sizeNum, mark, initMarginBps]);
 
   const valid = connected && sizeNum > 0 && !busy && !hasPosition;
 
@@ -89,27 +94,12 @@ export function TradePanel({ protocol, market }: { protocol: Protocol; market: M
         disabled={!connected || busy || hasPosition}
       />
 
-      {/* Leverage slider */}
-      <div className="mt-4">
-        <div className="mb-2 flex items-center justify-between">
-          <span className="label">Leverage</span>
-          <span className="font-mono text-sm font-semibold text-accent">{leverage}×</span>
-        </div>
-        <input
-          type="range"
-          min={1}
-          max={10}
-          step={1}
-          value={leverage}
-          onChange={(e) => setLeverage(Number(e.target.value))}
-          disabled={!connected || hasPosition}
-          className="h-1.5 w-full cursor-pointer appearance-none rounded-pill bg-ink-600 accent-accent"
-        />
-        <div className="mt-1 flex justify-between font-mono text-[10px] text-subtle">
-          <span>1×</span>
-          <span>5×</span>
-          <span>10×</span>
-        </div>
+      {/* Leverage — fixed by the on-chain initial-margin ratio (read live). */}
+      <div className="mt-4 flex items-center justify-between rounded-lg border border-line bg-ink-800/60 px-3 py-2.5">
+        <span className="label">Leverage (fixed)</span>
+        <span className="font-mono text-sm font-semibold text-accent">
+          {leverage}× · {initMarginPct}% margin
+        </span>
       </div>
 
       {/* Estimate readout */}

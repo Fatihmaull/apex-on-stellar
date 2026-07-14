@@ -4,10 +4,7 @@
 extern crate std;
 
 use proptest::prelude::*;
-use soroban_sdk::{
-    testutils::Address as _,
-    token, Address, BytesN, Env, Symbol,
-};
+use soroban_sdk::{testutils::Address as _, token, Address, BytesN, Env, Symbol};
 
 use crate::storage::{Config, SCALE};
 use crate::{ApexMarketplaceContract, ApexMarketplaceContractClient};

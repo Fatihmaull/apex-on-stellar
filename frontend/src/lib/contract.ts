@@ -48,6 +48,8 @@ export interface MarketSnapshot {
   buckets: Buckets;
   funding: { cumulative: number; lastTs: number };
   paused: boolean;
+  /** Initial-margin ratio in bps enforced on-chain (e.g. 2000 = 20% => fixed 5x). */
+  initMarginBps: number;
 }
 
 // --- Reads -------------------------------------------------------------------
@@ -89,6 +91,13 @@ export async function isPaused(): Promise<boolean> {
   return (await readContract<boolean>(CID(), 'is_paused')) ?? false;
 }
 
+/** Initial-margin ratio (bps) from the live config — the source of truth for the
+ *  fixed leverage the contract enforces (leverage = BPS_DENOM / init_margin_bps). */
+export async function getInitMarginBps(): Promise<number> {
+  const c = await readContract<{ init_margin_bps: bigint }>(CID(), 'get_config');
+  return Number(c?.init_margin_bps ?? 2000n);
+}
+
 export async function getMarginBalance(user: string): Promise<number> {
   return fromFixed((await readContract<bigint>(CID(), 'get_margin_balance', [addr(user)])) ?? 0n);
 }
@@ -111,15 +120,17 @@ export async function getPosition(user: string): Promise<Position> {
 
 /** Fetch all non-user market data in parallel. */
 export async function getMarketSnapshot(): Promise<MarketSnapshot> {
-  const [markPrice, oraclePrice, reserves, buckets, funding, paused] = await Promise.all([
-    getMarkPrice(),
-    getOraclePrice(),
-    getReserves(),
-    getBuckets(),
-    getFunding(),
-    isPaused(),
-  ]);
-  return { markPrice, oraclePrice, reserves, buckets, funding, paused };
+  const [markPrice, oraclePrice, reserves, buckets, funding, paused, initMarginBps] =
+    await Promise.all([
+      getMarkPrice(),
+      getOraclePrice(),
+      getReserves(),
+      getBuckets(),
+      getFunding(),
+      isPaused(),
+      getInitMarginBps(),
+    ]);
+  return { markPrice, oraclePrice, reserves, buckets, funding, paused, initMarginBps };
 }
 
 // --- Write builders (return unsigned XDR ready for the wallet) ---------------

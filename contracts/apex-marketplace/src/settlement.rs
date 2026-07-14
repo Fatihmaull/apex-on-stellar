@@ -5,7 +5,7 @@ use soroban_sdk::{panic_with_error, Address, Env, Symbol, Vec};
 use crate::cu_token;
 use crate::errors::Error;
 use crate::events;
-use crate::series::{mul_div_floor, mul_div_ceil};
+use crate::series::{mul_div_ceil, mul_div_floor};
 use crate::storage::{self, BPS_DENOM, SCALE};
 
 /// Fresh CU (ACPI) price: prefers cross-call to futures, falls back to local.
@@ -13,13 +13,14 @@ pub fn get_fresh_cu_price(env: &Env) -> i128 {
     let futures = storage::get_futures_oracle(env);
     // Cross-call when futures address is set to a real contract; on failure /
     // zero we use the locally mirrored price (keeper-synced).
-    let remote: i128 = env.try_invoke_contract::<i128, Error>(
-        &futures,
-        &Symbol::new(env, "get_oracle_price"),
-        Vec::new(env),
-    )
-    .unwrap_or(Ok(0))
-    .unwrap_or(0);
+    let remote: i128 = env
+        .try_invoke_contract::<i128, Error>(
+            &futures,
+            &Symbol::new(env, "get_oracle_price"),
+            Vec::new(env),
+        )
+        .unwrap_or(Ok(0))
+        .unwrap_or(0);
 
     let price = if remote > 0 {
         // Mirror for staleness accounting.

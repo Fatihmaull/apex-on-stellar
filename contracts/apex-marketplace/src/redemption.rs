@@ -12,15 +12,9 @@ use crate::storage;
 /// MVP: in-crate mock that mints a deterministic voucher id.
 pub fn fulfill_mock(env: &Env, series: u64, holder: &Address, amount: i128) -> BytesN<32> {
     let mut payload = soroban_sdk::Bytes::new(env);
-    payload.append(&soroban_sdk::Bytes::from_array(
-        env,
-        &series.to_be_bytes(),
-    ));
+    payload.append(&soroban_sdk::Bytes::from_array(env, &series.to_be_bytes()));
     // Mix in amount + ledger sequence for uniqueness.
-    payload.append(&soroban_sdk::Bytes::from_array(
-        env,
-        &amount.to_be_bytes(),
-    ));
+    payload.append(&soroban_sdk::Bytes::from_array(env, &amount.to_be_bytes()));
     payload.append(&soroban_sdk::Bytes::from_array(
         env,
         &env.ledger().sequence().to_be_bytes(),
@@ -31,7 +25,12 @@ pub fn fulfill_mock(env: &Env, series: u64, holder: &Address, amount: i128) -> B
 }
 
 /// Burn CU and grant a mock compute-access voucher (preview / mainnet seam).
-pub fn redeem_cu_for_access(env: &Env, holder: &Address, series_id: u64, amount: i128) -> BytesN<32> {
+pub fn redeem_cu_for_access(
+    env: &Env,
+    holder: &Address,
+    series_id: u64,
+    amount: i128,
+) -> BytesN<32> {
     holder.require_auth();
     admin::require_not_paused(env);
     if amount <= 0 {

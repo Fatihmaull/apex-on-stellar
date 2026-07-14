@@ -220,9 +220,7 @@ pub fn get_futures_oracle(env: &Env) -> Address {
         .unwrap()
 }
 pub fn set_futures_oracle(env: &Env, addr: &Address) {
-    env.storage()
-        .instance()
-        .set(&DataKey::FuturesOracle, addr);
+    env.storage().instance().set(&DataKey::FuturesOracle, addr);
 }
 
 pub fn is_paused(env: &Env) -> bool {
@@ -341,9 +339,7 @@ pub fn get_index_symbols(env: &Env) -> Vec<Symbol> {
 pub fn push_index_symbol(env: &Env, sym: &Symbol) {
     let mut syms = get_index_symbols(env);
     syms.push_back(sym.clone());
-    env.storage()
-        .instance()
-        .set(&DataKey::IndexSymbols, &syms);
+    env.storage().instance().set(&DataKey::IndexSymbols, &syms);
 }
 
 // --- Coefficient -----------------------------------------------------------

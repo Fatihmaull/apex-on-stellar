@@ -100,8 +100,7 @@ impl Rig {
 
     fn onboard_provider(&self, collat: i128, capacity: i128) -> Address {
         let owner = self.fund(collat + 1_000_000 * SCALE);
-        self.client
-            .register_provider(&owner, &self.zero_hash());
+        self.client.register_provider(&owner, &self.zero_hash());
         self.client.post_collateral(&owner, &collat);
         self.client
             .approve_provider(&self.verifier, &owner, &capacity);
@@ -115,7 +114,10 @@ fn test_init_and_coefficients() {
     assert_eq!(r.client.get_admin(), r.admin);
     assert_eq!(r.client.get_verifier(), r.verifier);
     assert!(!r.client.is_paused());
-    assert_eq!(r.client.get_coefficient(&Symbol::new(&r.env, "H100")), SCALE);
+    assert_eq!(
+        r.client.get_coefficient(&Symbol::new(&r.env, "H100")),
+        SCALE
+    );
     assert_eq!(
         r.client.get_coefficient(&Symbol::new(&r.env, "H200")),
         14_000_000
@@ -172,9 +174,9 @@ fn test_timelock_config() {
     r.client.propose_config(&r.admin, &cfg);
     let early = r.client.try_execute_config(&r.admin);
     assert_eq!(early, Err(Ok(Error::TimelockNotReady.into())));
-    r.env.ledger().set_timestamp(
-        r.env.ledger().timestamp() + TIMELOCK + 1,
-    );
+    r.env
+        .ledger()
+        .set_timestamp(r.env.ledger().timestamp() + TIMELOCK + 1);
     r.client.execute_config(&r.admin);
     assert_eq!(r.client.get_config().settlement_fee_bps, 10);
 }
@@ -193,14 +195,12 @@ fn test_mint_buy_sell_solvency() {
     assert_eq!(r.client.get_inventory(&sid), 100 * SCALE);
 
     let buyer = r.fund(10_000 * SCALE);
-    r.client
-        .buy_cu(&buyer, &sid, &(10 * SCALE), &(100 * SCALE));
+    r.client.buy_cu(&buyer, &sid, &(10 * SCALE), &(100 * SCALE));
     assert_eq!(r.client.cu_balance(&sid, &buyer), 10 * SCALE);
     assert_eq!(r.client.get_inventory(&sid), 90 * SCALE);
     r.assert_solvent();
 
-    r.client
-        .sell_cu(&buyer, &sid, &(5 * SCALE), &(20 * SCALE));
+    r.client.sell_cu(&buyer, &sid, &(5 * SCALE), &(20 * SCALE));
     assert_eq!(r.client.cu_balance(&sid, &buyer), 5 * SCALE);
     r.assert_solvent();
 }
@@ -233,8 +233,7 @@ fn test_cash_redeem() {
     );
     r.client.mint_cu(&provider, &sid, &(20 * SCALE));
     let buyer = r.fund(10_000 * SCALE);
-    r.client
-        .buy_cu(&buyer, &sid, &(10 * SCALE), &(100 * SCALE));
+    r.client.buy_cu(&buyer, &sid, &(10 * SCALE), &(100 * SCALE));
 
     let before = r.usdc.balance(&buyer);
     r.client.redeem_cu(&buyer, &sid, &(4 * SCALE));
@@ -297,10 +296,7 @@ fn test_subindex_cunvda() {
     // Sector factor 1.0 for MVP demo
     r.client
         .create_index(&r.admin, &Symbol::new(&r.env, "CUNVDA"), &SCALE);
-    assert_eq!(
-        r.client.get_index_nav(&Symbol::new(&r.env, "CUNVDA")),
-        ACPI
-    );
+    assert_eq!(r.client.get_index_nav(&Symbol::new(&r.env, "CUNVDA")), ACPI);
 }
 
 #[test]
