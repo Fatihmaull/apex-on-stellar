@@ -6,6 +6,16 @@ Off-chain helpers for running the exchange on testnet.
 |--------|---------|
 | `oracle-feeder.mjs` | Periodically pushes an APAC GPU Index price to `update_oracle`. |
 | `liquidation-keeper.mjs` | Polls open positions' health factor and calls `liquidate` on underwater ones. |
+| `attest-capacity.mjs` | Mock proof-of-capacity sign/verify (HMAC). Mainnet swaps for real attestation. |
+
+## Capacity attestation (marketplace)
+
+```bash
+node scripts/attest-capacity.mjs sign --provider G... --model H100 --qty 8 --hours 720
+node scripts/attest-capacity.mjs verify --file attestation.json
+```
+
+Optional: `APEX_ATTEST_SECRET` overrides the mock HMAC key.
 
 ## Setup
 

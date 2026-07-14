@@ -157,3 +157,58 @@ Before mainnet, raise `ProptestConfig::cases` well above the current 40 and add 
       `propose_upgrade` → wait `timelock_delay` → `execute_upgrade`
       (and `cancel_upgrade` aborts a pending one).
 - [ ] Monitoring on emitted events (`open`/`close`/`liquidate`/`funding`/`oracle`).
+
+---
+
+# APEX Marketplace — Deployment Checklist
+
+## Build
+
+```bash
+cargo test -p apex-marketplace
+cargo build --target wasm32v1-none --release -p apex-marketplace
+stellar contract optimize \
+  --wasm target/wasm32v1-none/release/apex_marketplace.wasm
+```
+
+## Deploy (testnet)
+
+Reuse futures identities; add a **verifier** (or pass `apex-oracle` / admin for demos).
+
+```bash
+ADMIN=$(stellar keys address apex-deployer)
+VERIFIER=$(stellar keys address apex-oracle)   # or dedicated apex-verifier
+PAUSER=$(stellar keys address apex-pauser)
+USDC=CBTXNIAJASVEWFR7QRYGQXIMBVC2GB4FXZEICUCXCRMCO6UM4K3RZEDL
+FUTURES=CDVCBYSD3D2AMH3EDCSCUONVREWDWIOEDJFZSWKQIJNH52TP6S7VDKCC
+
+stellar contract deploy \
+  --wasm target/wasm32v1-none/release/apex_marketplace.optimized.wasm \
+  --source apex-deployer --network testnet \
+  -- \
+  --admin "$ADMIN" \
+  --verifier "$VERIFIER" \
+  --pauser "$PAUSER" \
+  --usdc "$USDC" \
+  --futures_oracle "$FUTURES" \
+  --initial_cu_price 50000000 \
+  --config '{ "oracle_staleness": 86400, "settlement_fee_bps": "0" }' \
+  --timelock_delay 300
+```
+
+Post-deploy seed:
+
+```bash
+MID=<marketplace_id>
+# Insurance
+stellar contract invoke --id $MID --source apex-deployer --network testnet -- \
+  seed_insurance --from $ADMIN --amount 100000000000
+# Indices (nav_factor = SCALE = 1.0)
+stellar contract invoke --id $MID --source apex-deployer --network testnet -- \
+  create_index --caller $ADMIN --symbol CUINDEX --nav_factor 10000000
+stellar contract invoke --id $MID --source apex-deployer --network testnet -- \
+  create_index --caller $ADMIN --symbol CUNVDA --nav_factor 10000000
+```
+
+Regenerate bindings + set `NEXT_PUBLIC_MARKETPLACE_ID` in `frontend/.env.local`.
+Record the contract id in `deployments.md`.

@@ -18,15 +18,15 @@ const fade = {
 const PRODUCTS = [
   {
     name: 'APEX Trade',
-    tag: 'Access capacity',
-    desc: 'Hedge or take a view on compute prices with cash-settled futures.',
+    tag: 'Hedge the index',
+    desc: 'Cash-settled futures on the APAC GPU Index — live on Stellar testnet.',
     href: '/trade',
   },
   {
-    name: 'APEX Index',
-    tag: 'Measure the market',
-    desc: 'The reference price for APAC GPU compute, updated on-chain.',
-    href: '#index',
+    name: 'APEX Marketplace',
+    tag: 'Tokenize capacity',
+    desc: 'Providers mint CU; traders buy spot series and CU-INDEX shares.',
+    href: '/app',
   },
 ];
 

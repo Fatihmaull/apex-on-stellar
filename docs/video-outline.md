@@ -20,16 +20,18 @@ Tone: calm, confident, institutional. Let the product breathe (ornn-style).
 - On screen: the ACPI index board (Index / Mark / Premium, live on-chain) + a simple CU explainer card.
 - VO: "APEX standardizes compute into one unit — a CU: one H100-equivalent GPU-hour. We publish its price on-chain as the APAC Compute Price Index, and let anyone trade or hedge it."
 
-### 0:55–1:15 · Role selection (roadmap mock, keep short)
-- On screen: role picker — **Provider** vs **Trader** (mock/hi-fi).
+### 0:55–1:15 · Role selection (live routes)
+- On screen: role picker at `/app` — **Provider** vs **Trader**.
 - VO: "Two sides. Providers with compute tokenize verified capacity. Traders buy it, or hedge it."
 
-### 1:15–1:40 · Provider flow (roadmap mock)
-- On screen: provider registration → due-diligence checklist → "verified" → list CU with spec + price.
+### 1:15–1:40 · Provider flow (testnet + honest labels)
+- On screen: provider registration → due-diligence checklist (labeled mock KYB) → series mint.
 - VO: "A provider registers, passes due diligence, posts collateral, and mints tokenized CUs — each one backed by real, verified compute."
+- Note: if demo time is tight, keep this segment short; futures segment remains the proof.
 
 ### 1:40–2:30 · LIVE demo — trader hedges on-chain (the money shot)
 - On screen (REAL): connect Freighter → deposit USDC → **open a long on the APAC GPU Index** → oracle price moves → PnL updates → **close** → confirmed tx on Stellar Explorer.
+- Optional cut: `/trade/market` buy CU or `/trade/index` buy CU-INDEX (same testnet marketplace).
 - VO: "Here it's live on Stellar testnet. Connect a wallet, deposit USDC, take a position on compute prices. The oracle moves, PnL settles, and every trade finalizes on-chain in seconds."
 - Note: this is the segment that must be a real recording — it's our proof.
 

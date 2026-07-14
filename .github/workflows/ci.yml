@@ -37,10 +37,14 @@ jobs:
         run: cargo fmt --all --check
 
       - name: Clippy (deny warnings)
-        run: cargo clippy -p apex-futures --all-targets -- -D warnings
+        run: |
+          cargo clippy -p apex-futures --all-targets -- -D warnings
+          cargo clippy -p apex-marketplace --all-targets -- -D warnings
 
       - name: Unit + property tests
-        run: cargo test -p apex-futures
+        run: |
+          cargo test -p apex-futures
+          cargo test -p apex-marketplace
 
       # Build the wasm directly with cargo (the wasm target is installed above).
       # This is what `stellar contract build` wraps, without needing to compile
@@ -48,7 +52,9 @@ jobs:
       - name: Build WASM
         run: |
           cargo build --target wasm32v1-none --release -p apex-futures
+          cargo build --target wasm32v1-none --release -p apex-marketplace
           ls -lh target/wasm32v1-none/release/apex_futures.wasm
+          ls -lh target/wasm32v1-none/release/apex_marketplace.wasm
 
   frontend:
     name: Frontend (typecheck · build)

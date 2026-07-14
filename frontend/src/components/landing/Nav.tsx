@@ -30,7 +30,7 @@ export function Nav() {
           ))}
         </nav>
         <Link
-          href="/trade"
+          href="/app"
           className="font-mono text-[11px] uppercase tracking-wider text-fg link-reveal"
         >
           Launch App

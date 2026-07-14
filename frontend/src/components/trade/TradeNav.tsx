@@ -15,7 +15,21 @@ export function TradeNav() {
           <Link href="/">
             <Logo />
           </Link>
-          <Badge tone="accent">Compute Futures</Badge>
+          <Badge tone="accent">Futures</Badge>
+          <nav className="ml-2 hidden gap-3 font-mono text-[10px] uppercase tracking-wider text-subtle md:flex">
+            <Link href="/trade" className="text-white">
+              Hedge
+            </Link>
+            <Link href="/trade/market" className="hover:text-white">
+              Spot CU
+            </Link>
+            <Link href="/trade/index" className="hover:text-white">
+              Index
+            </Link>
+            <Link href="/app" className="hover:text-white">
+              Roles
+            </Link>
+          </nav>
           <span className="hidden font-mono text-[10px] uppercase tracking-wider text-subtle sm:inline">
             {ENV.network}
           </span>

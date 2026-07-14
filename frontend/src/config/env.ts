@@ -17,6 +17,11 @@ function required(value: string | undefined, key: string, fallback?: string): st
 
 export const ENV = {
   contractId: required(process.env.NEXT_PUBLIC_CONTRACT_ID, 'NEXT_PUBLIC_CONTRACT_ID'),
+  marketplaceId: required(
+    process.env.NEXT_PUBLIC_MARKETPLACE_ID,
+    'NEXT_PUBLIC_MARKETPLACE_ID',
+    '',
+  ),
   usdcSac: required(process.env.NEXT_PUBLIC_USDC_SAC, 'NEXT_PUBLIC_USDC_SAC'),
   network: (process.env.NEXT_PUBLIC_NETWORK as NetworkName) || 'TESTNET',
   rpcUrl: required(

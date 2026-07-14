@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
   "contracts/apex-futures",
+  "contracts/apex-marketplace",
 ]
 
 [workspace.dependencies]

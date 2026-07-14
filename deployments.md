@@ -5,6 +5,23 @@ live in the local Stellar CLI keystore (`~/.config/stellar/identity/*.toml`).
 
 ---
 
+## Testnet — 2026-07-14 · Marketplace (CU spot + index)
+
+| Contract | ID |
+|---|---|
+| **APEX Marketplace** | `CDAM76V2FX7Y26UATDY2FL4CZ3RMYBNXHZQSQP6X6DRFLVQLQPCKNY2F` |
+| APEX Futures (oracle / ACPI) | `CDVCBYSD3D2AMH3EDCSCUONVREWDWIOEDJFZSWKQIJNH52TP6S7VDKCC` |
+| Test USDC (SAC) | `CBTXNIAJASVEWFR7QRYGQXIMBVC2GB4FXZEICUCXCRMCO6UM4K3RZEDL` |
+
+- Contract: https://stellar.expert/explorer/testnet/contract/CDAM76V2FX7Y26UATDY2FL4CZ3RMYBNXHZQSQP6X6DRFLVQLQPCKNY2F
+- WASM hash: `07f4d1a8c8aebf2c5316f555687f1630d1e4cda478108ce3dd5a2858f4ad238e`
+- Roles: admin=`apex-deployer`, verifier=`apex-oracle`, pauser=`apex-pauser`
+- Seeded: insurance 10,000 USDC; indices `CUINDEX` + `CUNVDA` (nav_factor=1.0)
+- Demo series #1: H100 @ $5.20/CU, 50 CU inventory (provider = deployer)
+- Frontend: set `NEXT_PUBLIC_MARKETPLACE_ID` (see `.env.local.example`)
+
+---
+
 ## Testnet — 2026-07-13 (current · Phase D timelock build)
 
 Network: `Test SDF Network ; September 2015` · RPC `https://soroban-testnet.stellar.org`
