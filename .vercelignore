@@ -1,0 +1,18 @@
+# Vercel builds only frontend/ (see the project's Root Directory setting).
+# Everything below is dead weight for the upload — target/ alone is several GB
+# and aborts the deploy.
+
+# Rust / Soroban
+target
+contracts
+scripts
+Cargo.toml
+Cargo.lock
+
+# Node
+**/node_modules
+**/.next
+**/out
+
+# Local only
+**/.env.local
