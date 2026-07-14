@@ -5,7 +5,7 @@ import { motion } from 'framer-motion';
 import { useIndex } from '../../hooks/useIndex';
 import { fmtUsd, fmtPct, fmtCompact } from '../../lib/utils';
 
-const SUPPORTED = ['ACPI-H200', 'ACPI-B200', 'ACPI-GB200', 'ACPI-A100'];
+const SUPPORTED = ['apex-index-H200', 'apex-index-B200', 'apex-index-GB200', 'apex-index-A100'];
 
 export function IndexSection() {
   const { index, mark, premium, depth, live } = useIndex();
@@ -21,7 +21,7 @@ export function IndexSection() {
           transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
           className="mt-4 max-w-2xl font-display text-2xl font-medium leading-snug tracking-tight text-fg md:text-4xl"
         >
-          The ACPI. The reference price for APAC compute.
+          The apex-index. The reference price for APAC compute.
         </motion.h2>
 
         {/* Live index board */}
@@ -29,7 +29,7 @@ export function IndexSection() {
           <div className="flex items-center justify-between border-b border-line bg-ink-800 px-5 py-3">
             <div className="flex items-center gap-3">
               <span className="label">Index</span>
-              <span className="font-mono text-xs text-fg">ACPI-H100</span>
+              <span className="font-mono text-xs text-fg">apex-index-H100</span>
               <span className="rounded-sm bg-ink-600 px-1.5 py-0.5 font-mono text-[10px] text-fg-dim">
                 SIN
               </span>
@@ -73,7 +73,7 @@ export function IndexSection() {
         </div>
 
         <p className="mt-10 max-w-2xl text-sm leading-relaxed text-fg-muted">
-          The ACPI tracks spot rental prices for GPU compute across major hardware types
+          The apex-index tracks spot rental prices for GPU compute across major hardware types
           in the APAC corridor. It is aggregated from Tier-2 data-center operators,
           cryptographically attested, and published on-chain through a multi-sig GRC
           oracle — the foundation for pricing, hedging, and settlement across the region&apos;s

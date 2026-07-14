@@ -28,14 +28,14 @@ export default function IndexPage() {
   const address = useWalletStore((s) => s.address);
   const signXdr = useWalletStore((s) => s.signXdr);
   const { toast } = useToast();
-  const [acpi, setAcpi] = useState(5);
+  const [apexIndex, setApexIndex] = useState(5);
   const [navs, setNavs] = useState<Record<string, number>>({});
   const [shares, setShares] = useState<Record<string, number>>({});
   const [usdc, setUsdc] = useState('50');
   const [busy, setBusy] = useState(false);
 
   const refresh = async () => {
-    setAcpi(await getCuOraclePrice());
+    setApexIndex(await getCuOraclePrice());
     const next: Record<string, number> = {};
     const sh: Record<string, number> = {};
     for (const i of INDICES) {
@@ -118,13 +118,13 @@ export default function IndexPage() {
       <div className="mx-auto max-w-5xl px-5 py-10">
         <h1 className="font-display text-3xl">CU index vaults</h1>
         <p className="mt-2 max-w-2xl text-sm text-white/55">
-          Synthetic NAV vaults — deposit USDC, receive shares priced off ACPI. Cash-settled
+          Synthetic NAV vaults — deposit USDC, receive shares priced off apex-index. Cash-settled
           redeem. Hedge spot CU holdings on the live futures terminal.
         </p>
 
         <div className="mt-6 border border-line bg-ink-800/50 p-5">
-          <div className="label text-subtle">ACPI (CU oracle)</div>
-          <div className="mt-1 font-mono text-3xl tabular">${acpi.toFixed(4)}</div>
+          <div className="label text-subtle">apex-index (CU oracle)</div>
+          <div className="mt-1 font-mono text-3xl tabular">${apexIndex.toFixed(4)}</div>
           {!marketplaceReady() && (
             <p className="mt-2 text-xs text-ember">Preview — marketplace id not set</p>
           )}
@@ -149,7 +149,7 @@ export default function IndexPage() {
               <dl className="mt-6 space-y-2 font-mono text-sm">
                 <div className="flex justify-between">
                   <dt className="text-subtle">NAV</dt>
-                  <dd className="tabular">${(navs[i.symbol] ?? acpi).toFixed(4)}</dd>
+                  <dd className="tabular">${(navs[i.symbol] ?? apexIndex).toFixed(4)}</dd>
                 </div>
                 <div className="flex justify-between">
                   <dt className="text-subtle">Your shares</dt>
