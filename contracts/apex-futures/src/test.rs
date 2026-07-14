@@ -2,11 +2,13 @@
 extern crate std;
 
 use soroban_sdk::{
+    symbol_short,
     testutils::{Address as _, Ledger as _},
-    token, Address, Env,
+    token, vec, Address, Env,
 };
 
 use crate::errors::Error;
+use crate::sep40::Asset;
 use crate::storage::{Config, SCALE};
 use crate::{ApexFuturesContract, ApexFuturesContractClient};
 
@@ -605,4 +607,245 @@ fn test_solvency_invariant_across_sequence() {
 
     let _ = r.client.collect_fees(&r.fee_collector);
     r.assert_solvent();
+}
+
+// --- TWAP ------------------------------------------------------------------
+
+const HOUR: u64 = 3_600;
+
+#[test]
+fn test_twap_off_by_default_and_matches_spot() {
+    let r = setup();
+    // A contract that has never heard of TWAP behaves exactly as it did before:
+    // this default is what makes an in-place upgrade of the live contract safe.
+    assert_eq!(r.client.get_twap_window(), 0);
+
+    r.client.update_oracle(&r.oracle_updater, &(5 * SCALE));
+    assert_eq!(r.client.get_risk_price(), r.client.get_oracle_price());
+    assert_eq!(r.client.get_risk_price(), 5 * SCALE);
+}
+
+#[test]
+fn test_twap_smooths_a_spike_but_follows_a_sustained_move() {
+    let r = setup();
+    r.env.ledger().set_timestamp(HOUR);
+
+    // An hour of the index sitting at 5.0.
+    r.client.update_oracle(&r.oracle_updater, &(5 * SCALE));
+    r.env.ledger().set_timestamp(2 * HOUR);
+
+    // A momentary crash to 3.0. It has held for zero seconds, so a 1h TWAP still
+    // reads 5.0 — the spike carries no time weight at all.
+    r.client.update_oracle(&r.oracle_updater, &(3 * SCALE));
+    assert_eq!(
+        r.client.get_oracle_price(),
+        3 * SCALE,
+        "spot follows the spike"
+    );
+    assert_eq!(r.client.get_twap(&HOUR), 5 * SCALE, "TWAP ignores it");
+
+    // Let 3.0 actually stand for an hour and the TWAP converges on it.
+    r.env.ledger().set_timestamp(3 * HOUR);
+    assert_eq!(
+        r.client.get_twap(&HOUR),
+        3 * SCALE,
+        "TWAP follows a real move"
+    );
+}
+
+#[test]
+fn test_twap_is_time_weighted_not_a_plain_average() {
+    let r = setup();
+    r.env.ledger().set_timestamp(HOUR);
+
+    // 5.0 holds for 45 min, then 3.0 for 15 min. A plain mean of the two prices
+    // would say 4.0; time-weighted is (5*2700 + 3*900) / 3600 = 4.5.
+    // (3.0 is a 40% move, inside the 50% oracle deviation band the config allows.)
+    r.client.update_oracle(&r.oracle_updater, &(5 * SCALE));
+    r.env.ledger().set_timestamp(HOUR + 2_700);
+    r.client.update_oracle(&r.oracle_updater, &(3 * SCALE));
+    r.env.ledger().set_timestamp(HOUR + 3_600);
+
+    assert_eq!(r.client.get_twap(&HOUR), 45 * SCALE / 10);
+}
+
+/// The whole point of the feature: a flash-crashed index must not be able to
+/// mass-liquidate. This is the shape of the Feb-2026 Blend exploit, where the
+/// feed reported the last trade with no smoothing.
+#[test]
+fn test_twap_blocks_liquidation_on_a_flash_crash() {
+    let r = setup();
+    r.env.ledger().set_timestamp(HOUR);
+
+    let user = r.fund(120 * SCALE);
+    r.client.deposit_margin(&user, &(120 * SCALE));
+    r.client.open_position(&user, &(100 * SCALE), &true, &0);
+
+    // Establish an hour of honest 5.0 index, then switch smoothing on.
+    r.client.update_oracle(&r.oracle_updater, &(5 * SCALE));
+    r.client.set_twap_window(&r.admin, &HOUR);
+    r.env.ledger().set_timestamp(2 * HOUR);
+
+    // Attacker slams the index to 4.0 — enough to make this position liquidatable
+    // at spot (see test_liquidation_when_index_drops, which does exactly that).
+    r.client.update_oracle(&r.oracle_updater, &(4 * SCALE));
+    assert_eq!(r.client.get_oracle_price(), 4 * SCALE);
+    assert_eq!(
+        r.client.get_risk_price(),
+        5 * SCALE,
+        "risk price is unmoved"
+    );
+
+    let liquidator = Address::generate(&r.env);
+    assert_eq!(
+        r.client.try_liquidate(&liquidator, &user),
+        Err(Ok(Error::NotLiquidatable.into())),
+        "a zero-duration spike must not be able to liquidate"
+    );
+    assert_eq!(
+        r.client.get_position(&user).size,
+        100 * SCALE,
+        "position survives"
+    );
+    r.assert_solvent();
+
+    // A *real* decline still liquidates: hold 4.0 for an hour and the risk price
+    // catches up. Smoothing delays liquidation; it never prevents it.
+    r.env.ledger().set_timestamp(3 * HOUR);
+    assert_eq!(r.client.get_risk_price(), 4 * SCALE);
+    r.client.liquidate(&liquidator, &user);
+    assert_eq!(r.client.get_position(&user).size, 0);
+    r.assert_solvent();
+}
+
+#[test]
+fn test_price_history_is_bounded() {
+    let r = setup();
+    // Push more observations than the ring holds. It must not grow without bound,
+    // or `update_oracle` would get more expensive with every call ever made.
+    for i in 1..=30u64 {
+        r.env.ledger().set_timestamp(i * 60);
+        r.client.update_oracle(&r.oracle_updater, &(5 * SCALE));
+    }
+    let hist = r.client.get_price_history();
+    assert_eq!(hist.len(), 24, "ring buffer caps at MAX_PRICE_POINTS");
+    assert_eq!(
+        hist.last().unwrap().ts,
+        30 * 60,
+        "newest observation is retained"
+    );
+}
+
+#[test]
+fn test_twap_window_is_bounded_and_admin_only() {
+    let r = setup();
+    let stranger = Address::generate(&r.env);
+
+    assert_eq!(
+        r.client.try_set_twap_window(&stranger, &HOUR),
+        Err(Ok(Error::Unauthorized.into()))
+    );
+    assert_eq!(
+        r.client.try_set_twap_window(&r.admin, &86_401u64),
+        Err(Ok(Error::InvalidParams.into())),
+        "windows beyond a day are rejected"
+    );
+
+    r.client.set_twap_window(&r.admin, &HOUR);
+    assert_eq!(r.client.get_twap_window(), HOUR);
+    // And it can always be switched back off.
+    r.client.set_twap_window(&r.admin, &0);
+    assert_eq!(r.client.get_twap_window(), 0);
+}
+
+// --- SEP-40 price feed -----------------------------------------------------
+
+#[test]
+fn test_sep40_metadata() {
+    let r = setup();
+    let acpi = Asset::Other(symbol_short!("ACPI"));
+
+    assert_eq!(r.client.assets(), vec![&r.env, acpi]);
+    assert_eq!(r.client.decimals(), 7, "prices are 7-dp fixed point");
+    assert_eq!(r.client.resolution(), 300);
+
+    // Everything is quoted in the collateral asset.
+    match r.client.base() {
+        Asset::Stellar(addr) => assert_eq!(addr, r.usdc.address),
+        _ => panic!("base must be the USDC SAC"),
+    }
+}
+
+#[test]
+fn test_sep40_lastprice_and_prices() {
+    let r = setup();
+    let acpi = Asset::Other(symbol_short!("ACPI"));
+    r.env.ledger().set_timestamp(1_000);
+
+    r.client.update_oracle(&r.oracle_updater, &(5 * SCALE));
+    r.env.ledger().set_timestamp(2_000);
+    r.client.update_oracle(&r.oracle_updater, &(6 * SCALE));
+
+    let last = r.client.lastprice(&acpi).unwrap();
+    assert_eq!(last.price, 6 * SCALE);
+    assert_eq!(last.timestamp, 2_000);
+
+    // Newest first, as SEP-40 consumers expect.
+    let hist = r.client.prices(&acpi, &2).unwrap();
+    assert_eq!(hist.len(), 2);
+    assert_eq!(hist.get(0).unwrap().price, 6 * SCALE);
+    assert_eq!(hist.get(1).unwrap().price, 5 * SCALE);
+
+    // Asking for more than we retain yields what we have, rather than failing.
+    assert_eq!(r.client.prices(&acpi, &100).unwrap().len(), 2);
+}
+
+#[test]
+fn test_sep40_historical_price_lookup() {
+    let r = setup();
+    let acpi = Asset::Other(symbol_short!("ACPI"));
+    r.env.ledger().set_timestamp(1_000);
+    r.client.update_oracle(&r.oracle_updater, &(5 * SCALE));
+    r.env.ledger().set_timestamp(2_000);
+    r.client.update_oracle(&r.oracle_updater, &(6 * SCALE));
+
+    // The price that *prevailed* at a moment, not the nearest sample.
+    assert_eq!(r.client.price(&acpi, &1_500).unwrap().price, 5 * SCALE);
+    assert_eq!(r.client.price(&acpi, &2_000).unwrap().price, 6 * SCALE);
+    assert_eq!(r.client.price(&acpi, &9_999).unwrap().price, 6 * SCALE);
+
+    // Before anything we retain: no answer, rather than a wrong one.
+    assert_eq!(r.client.price(&acpi, &500), None);
+}
+
+#[test]
+fn test_sep40_rejects_unknown_assets() {
+    let r = setup();
+    r.client.update_oracle(&r.oracle_updater, &(5 * SCALE));
+
+    // A consumer pointed at the wrong asset must get None, never ACPI's price
+    // under another name.
+    let btc = Asset::Other(symbol_short!("BTC"));
+    assert_eq!(r.client.lastprice(&btc), None);
+    assert_eq!(r.client.prices(&btc, &5), None);
+    assert_eq!(r.client.price(&btc, &1_000), None);
+    assert_eq!(r.client.twap(&btc, &5), None);
+}
+
+/// The Reflector-compatible extension, and the reason it exists: a consumer that
+/// reads `twap()` instead of `lastprice()` is not fooled by a flash crash.
+#[test]
+fn test_sep40_twap_matches_the_risk_price() {
+    let r = setup();
+    let acpi = Asset::Other(symbol_short!("ACPI"));
+    r.env.ledger().set_timestamp(HOUR);
+
+    r.client.update_oracle(&r.oracle_updater, &(5 * SCALE));
+    r.env.ledger().set_timestamp(2 * HOUR);
+    r.client.update_oracle(&r.oracle_updater, &(3 * SCALE)); // flash crash
+
+    // A naive consumer reading the last price sees the crash…
+    assert_eq!(r.client.lastprice(&acpi).unwrap().price, 3 * SCALE);
+    // …while one reading the TWAP does not.
+    assert_eq!(r.client.twap(&acpi, &2).unwrap(), 5 * SCALE);
 }

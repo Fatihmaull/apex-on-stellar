@@ -19,7 +19,7 @@
 // the contract's public ABI.
 #![allow(clippy::too_many_arguments)]
 
-use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, Vec};
 
 mod admin;
 mod errors;
@@ -28,6 +28,7 @@ mod funding;
 mod liquidation;
 mod margin;
 mod oracle;
+mod sep40;
 mod storage;
 mod vamm;
 
@@ -38,7 +39,8 @@ mod test;
 mod fuzz;
 
 use errors::Error;
-use storage::{Config, Position, BPS_DENOM};
+use sep40::{Asset, PriceData};
+use storage::{Config, Position, PricePoint, BPS_DENOM};
 use vamm::{fp_div, mul_div_floor, swap};
 
 /// vAMM virtual reserves, returned to callers/frontend.
@@ -280,6 +282,23 @@ impl ApexFuturesContract {
         oracle::update_price(&env, &updater, price);
     }
 
+    /// Set the TWAP window (seconds) applied to the risk price. `0` disables
+    /// smoothing and the risk engine reads the latest index, as it did before
+    /// this feature existed.
+    ///
+    /// Admin-gated and event-emitting, but **not** timelocked: this is the lever
+    /// that blunts an oracle manipulation already under way, and a 24h delay on
+    /// reaching for it would defeat the point.
+    ///
+    /// Residual risk, stated plainly: while the index is moving, a longer window
+    /// holds the risk price above spot on a fall — which shields longs but brings
+    /// *shorts* closer to liquidation. A hostile admin could time a change to
+    /// favour one side. Bounding the window limits the blast radius; removing the
+    /// risk needs the admin key in a multisig (see SECURITY.md §4).
+    pub fn set_twap_window(env: Env, caller: Address, window: u64) {
+        admin::set_twap_window(&env, &caller, window);
+    }
+
     // ----------------------------------------------------------------------
     // Administration (RBAC)
     // ----------------------------------------------------------------------
@@ -384,6 +403,81 @@ impl ApexFuturesContract {
 
     pub fn get_oracle_price(env: Env) -> i128 {
         oracle::get_price(&env)
+    }
+
+    /// The price the risk engine actually acts on: the TWAP when smoothing is
+    /// enabled, otherwise the latest index. Compare against `get_oracle_price`
+    /// to see how far a spike has been damped.
+    pub fn get_risk_price(env: Env) -> i128 {
+        oracle::risk_price(&env)
+    }
+
+    /// TWAP over an arbitrary trailing window, for charting and what-if queries.
+    /// Does not have to match the configured window.
+    pub fn get_twap(env: Env, window: u64) -> i128 {
+        oracle::twap(&env, window)
+    }
+
+    /// Configured TWAP window in seconds; `0` means smoothing is off.
+    pub fn get_twap_window(env: Env) -> u64 {
+        storage::get_twap_window(&env)
+    }
+
+    /// Retained index observations backing the TWAP (oldest first, max 24).
+    pub fn get_price_history(env: Env) -> Vec<PricePoint> {
+        storage::get_price_history(&env)
+    }
+
+    // ----------------------------------------------------------------------
+    // SEP-40 price feed
+    //
+    // APEX prices something no oracle on Stellar does — an hour of APAC GPU
+    // compute. Behind SEP-40, any protocol already reading a standard feed can
+    // consume it by swapping the contract address, with no integration code.
+    // Read-only; see `sep40.rs`.
+    // ----------------------------------------------------------------------
+
+    /// Denomination every price is quoted in: the collateral asset (USDC).
+    pub fn base(env: Env) -> Asset {
+        sep40::base(&env)
+    }
+
+    /// Assets this feed quotes. APEX runs one market, so: `Other("ACPI")`.
+    pub fn assets(env: Env) -> Vec<Asset> {
+        sep40::assets(&env)
+    }
+
+    /// Fixed-point precision of every reported price (7).
+    pub fn decimals(_env: Env) -> u32 {
+        sep40::DECIMALS
+    }
+
+    /// Advertised publish cadence in seconds. Not enforced on-chain — judge
+    /// freshness from `lastprice().timestamp`, not from this.
+    pub fn resolution(_env: Env) -> u32 {
+        sep40::RESOLUTION
+    }
+
+    /// Latest index price. `None` for an unknown asset or before the first push.
+    pub fn lastprice(env: Env, asset: Asset) -> Option<PriceData> {
+        sep40::lastprice(&env, &asset)
+    }
+
+    /// The last `records` observations, newest first, bounded by what is retained.
+    pub fn prices(env: Env, asset: Asset, records: u32) -> Option<Vec<PriceData>> {
+        sep40::prices(&env, &asset, records)
+    }
+
+    /// The price that prevailed at `timestamp`. Any timestamp is accepted.
+    pub fn price(env: Env, asset: Asset, timestamp: u64) -> Option<PriceData> {
+        sep40::price(&env, &asset, timestamp)
+    }
+
+    /// Time-weighted average across the last `records` observations. A Reflector
+    /// extension rather than SEP-40 proper — and the one that matters, since
+    /// consuming a raw last price with no smoothing is what cost Blend ~$10.8M.
+    pub fn twap(env: Env, asset: Asset, records: u32) -> Option<i128> {
+        sep40::twap(&env, &asset, records)
     }
 
     pub fn get_health_factor(env: Env, user: Address) -> i128 {

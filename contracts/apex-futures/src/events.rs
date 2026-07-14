@@ -64,6 +64,12 @@ pub fn funding(env: &Env, premium: i128, cum_funding: i128, ts: u64) {
         .publish((symbol_short!("funding"),), (premium, cum_funding, ts));
 }
 
+/// (by, new_window_seconds) — 0 means TWAP smoothing was switched off.
+pub fn twap_window_set(env: &Env, by: &Address, window: u64) {
+    env.events()
+        .publish((symbol_short!("twapwin"),), (by.clone(), window));
+}
+
 /// (collector, amount)
 pub fn fees_collected(env: &Env, to: &Address, amount: i128) {
     env.events()
