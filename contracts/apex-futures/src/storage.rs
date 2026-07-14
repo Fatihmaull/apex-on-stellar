@@ -1,4 +1,4 @@
-use soroban_sdk::{contracttype, Address, BytesN, Env};
+use soroban_sdk::{contracttype, Address, BytesN, Env, Vec};
 
 // --- Global scaling constants ---------------------------------------------
 
@@ -37,12 +37,14 @@ pub enum DataKey {
     TimelockDelay,  // seconds a governance action must wait before execution (u64)
     PendingUpgrade, // queued WASM upgrade awaiting its timelock (PendingUpgrade)
     PendingConfig,  // queued config change awaiting its timelock (PendingConfig)
+    TwapWindow,     // seconds of TWAP smoothing applied to the risk price; 0 = off (u64)
 
     // --- Instance: vAMM & oracle market state ---
     VammBase,      // x: virtual base reserve (compute units, 7 dp)
     VammQuote,     // y: virtual quote reserve (USDC, 7 dp)
     OraclePrice,   // last GRC index price (USDC per base unit, 7 dp)
     OracleTs,      // ledger timestamp of the last oracle update (u64)
+    PriceHistory,  // bounded ring of recent index observations (Vec<PricePoint>)
     CumFunding,    // cumulative funding index (USDC per base unit, 7 dp, signed)
     LastFundingTs, // ledger timestamp of the last funding settlement (u64)
 
@@ -109,6 +111,20 @@ pub struct Config {
     /// Minimum position size in base units (7 dp).
     pub min_position_size: i128,
 }
+
+/// One index observation, retained so the risk price can be time-weighted.
+#[derive(Clone, Debug, PartialEq)]
+#[contracttype]
+pub struct PricePoint {
+    /// Index price at `ts` (USDC per base unit, 7 dp).
+    pub price: i128,
+    /// Ledger timestamp the price was published.
+    pub ts: u64,
+}
+
+/// Observations retained for the TWAP. Bounded so the instance entry stays small
+/// and `update_oracle` keeps a constant cost.
+pub const MAX_PRICE_POINTS: u32 = 24;
 
 /// A WASM upgrade queued behind the governance timelock.
 #[derive(Clone, Debug, PartialEq)]
@@ -287,6 +303,50 @@ pub fn get_oracle_ts(env: &Env) -> u64 {
 }
 pub fn set_oracle_ts(env: &Env, ts: u64) {
     env.storage().instance().set(&DataKey::OracleTs, &ts);
+}
+
+// --- TWAP ------------------------------------------------------------------
+// Both keys default when absent, so a contract upgraded in place (whose storage
+// predates them) keeps behaving exactly as before until TWAP is switched on.
+
+/// Seconds of smoothing applied to the risk price. `0` disables TWAP entirely
+/// and the risk engine reads the latest index, as it did before.
+pub fn get_twap_window(env: &Env) -> u64 {
+    env.storage()
+        .instance()
+        .get(&DataKey::TwapWindow)
+        .unwrap_or(0)
+}
+pub fn set_twap_window(env: &Env, secs: u64) {
+    env.storage().instance().set(&DataKey::TwapWindow, &secs);
+}
+
+pub fn get_price_history(env: &Env) -> Vec<PricePoint> {
+    env.storage()
+        .instance()
+        .get(&DataKey::PriceHistory)
+        .unwrap_or_else(|| Vec::new(env))
+}
+
+/// Append an observation, evicting the oldest once `MAX_PRICE_POINTS` is reached.
+/// Repeated updates inside the same ledger second overwrite the last point rather
+/// than filling the ring with zero-duration entries.
+pub fn push_price_point(env: &Env, price: i128, ts: u64) {
+    let mut hist = get_price_history(env);
+    let len = hist.len();
+    if len > 0 {
+        let last = hist.get(len - 1).unwrap();
+        if last.ts == ts {
+            hist.set(len - 1, PricePoint { price, ts });
+            env.storage().instance().set(&DataKey::PriceHistory, &hist);
+            return;
+        }
+    }
+    hist.push_back(PricePoint { price, ts });
+    while hist.len() > MAX_PRICE_POINTS {
+        hist.remove(0);
+    }
+    env.storage().instance().set(&DataKey::PriceHistory, &hist);
 }
 
 // --- Funding ---------------------------------------------------------------

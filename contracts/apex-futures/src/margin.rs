@@ -99,14 +99,15 @@ pub fn health_factor_at(env: &Env, pos: &Position, price: i128) -> i128 {
     mul_div_floor(env, equity, SCALE, maint_req)
 }
 
-/// Health factor for display/queries. Prefers the index price; falls back to the
-/// vAMM mark only if no oracle price is set yet.
+/// Health factor for display/queries. Reads the same risk price liquidation acts
+/// on (TWAP-smoothed once enabled), so what a user is shown matches what the
+/// chain will do; falls back to the vAMM mark only if no index is set yet.
 pub fn health_factor(env: &Env, user: &Address) -> i128 {
     let pos = storage::get_position(env, user);
     if pos.size == 0 {
         return SCALE * 100;
     }
-    let index = storage::get_oracle_price(env);
+    let index = oracle::risk_price(env);
     let price = if index > 0 {
         index
     } else {

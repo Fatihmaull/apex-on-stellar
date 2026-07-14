@@ -38,6 +38,7 @@ pub fn update_price(env: &Env, updater: &Address, new_price: i128) {
     let now = env.ledger().timestamp();
     storage::set_oracle_price(env, new_price);
     storage::set_oracle_ts(env, now);
+    storage::push_price_point(env, new_price, now);
     storage::extend_instance(env);
     events::oracle(env, new_price, now);
 }
@@ -47,12 +48,89 @@ pub fn get_price(env: &Env) -> i128 {
     storage::get_oracle_price(env)
 }
 
-/// Read the index price, rejecting it if older than the staleness window.
-/// Used by risk-critical paths (liquidation, withdrawal-with-position) so
-/// decisions are never made on outdated data.
+/// Time-weighted average of the index over the trailing `window` seconds.
+///
+/// Each observation is taken to be the prevailing price from the moment it was
+/// published until the next one lands (or until `now`, for the newest), so a
+/// price that stood for an hour outweighs one that stood for a second. That is
+/// what stops a single spike — the shape of the Feb-2026 Blend oracle exploit,
+/// where the feed reported the last trade with no smoothing — from moving the
+/// risk price far enough to mass-liquidate.
+///
+/// Falls back to the latest index whenever the window covers no elapsed time
+/// (fresh deploy, empty history, or every observation inside one ledger), so the
+/// risk engine can never be starved of a price.
+pub fn twap(env: &Env, window: u64) -> i128 {
+    let spot = storage::get_oracle_price(env);
+    if window == 0 {
+        return spot;
+    }
+    let hist = storage::get_price_history(env);
+    let n = hist.len();
+    if n == 0 {
+        return spot;
+    }
+
+    let now = env.ledger().timestamp();
+    let start = now.saturating_sub(window);
+
+    let mut weighted: i128 = 0; // Σ price × seconds held
+    let mut elapsed: i128 = 0; // Σ seconds held
+
+    for i in 0..n {
+        let p = hist.get(i).unwrap();
+        // An observation prevails until the next one lands (or until now).
+        let seg_end = if i + 1 < n {
+            hist.get(i + 1).unwrap().ts
+        } else {
+            now
+        };
+        if seg_end <= start {
+            continue; // fell entirely outside the window
+        }
+        let seg_start = if p.ts > start { p.ts } else { start };
+        if seg_end <= seg_start {
+            continue;
+        }
+        let dt = (seg_end - seg_start) as i128;
+        let contrib = match p.price.checked_mul(dt) {
+            Some(v) => v,
+            None => panic_with_error!(env, Error::MathOverflow),
+        };
+        weighted = match weighted.checked_add(contrib) {
+            Some(v) => v,
+            None => panic_with_error!(env, Error::MathOverflow),
+        };
+        elapsed += dt;
+    }
+
+    if elapsed == 0 {
+        return spot;
+    }
+    weighted / elapsed
+}
+
+/// The price the risk engine trades on. Equals the latest index when TWAP is
+/// switched off (`twap_window == 0`) — the pre-upgrade behaviour, and the default
+/// for any contract whose storage predates this key.
+pub fn risk_price(env: &Env) -> i128 {
+    let window = storage::get_twap_window(env);
+    if window == 0 {
+        storage::get_oracle_price(env)
+    } else {
+        twap(env, window)
+    }
+}
+
+/// Read the risk price, rejecting it if the feed has gone stale. Used by
+/// risk-critical paths (liquidation, withdrawal-with-position) so decisions are
+/// never made on outdated data.
+///
+/// Staleness is judged on the *latest* observation, never on the TWAP: smoothing
+/// must not be able to disguise a feed that has stopped publishing.
 pub fn get_fresh_price(env: &Env) -> i128 {
-    let price = storage::get_oracle_price(env);
-    if price <= 0 {
+    let spot = storage::get_oracle_price(env);
+    if spot <= 0 {
         panic_with_error!(env, Error::StaleOracle);
     }
     let cfg = storage::get_config(env);
@@ -61,5 +139,5 @@ pub fn get_fresh_price(env: &Env) -> i128 {
     if now > ts && now - ts > cfg.oracle_staleness {
         panic_with_error!(env, Error::StaleOracle);
     }
-    price
+    risk_price(env)
 }

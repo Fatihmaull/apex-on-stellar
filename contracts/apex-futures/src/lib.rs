@@ -19,7 +19,7 @@
 // the contract's public ABI.
 #![allow(clippy::too_many_arguments)]
 
-use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env};
+use soroban_sdk::{contract, contractimpl, contracttype, Address, BytesN, Env, Vec};
 
 mod admin;
 mod errors;
@@ -38,7 +38,7 @@ mod test;
 mod fuzz;
 
 use errors::Error;
-use storage::{Config, Position, BPS_DENOM};
+use storage::{Config, Position, PricePoint, BPS_DENOM};
 use vamm::{fp_div, mul_div_floor, swap};
 
 /// vAMM virtual reserves, returned to callers/frontend.
@@ -280,6 +280,23 @@ impl ApexFuturesContract {
         oracle::update_price(&env, &updater, price);
     }
 
+    /// Set the TWAP window (seconds) applied to the risk price. `0` disables
+    /// smoothing and the risk engine reads the latest index, as it did before
+    /// this feature existed.
+    ///
+    /// Admin-gated and event-emitting, but **not** timelocked: this is the lever
+    /// that blunts an oracle manipulation already under way, and a 24h delay on
+    /// reaching for it would defeat the point.
+    ///
+    /// Residual risk, stated plainly: while the index is moving, a longer window
+    /// holds the risk price above spot on a fall — which shields longs but brings
+    /// *shorts* closer to liquidation. A hostile admin could time a change to
+    /// favour one side. Bounding the window limits the blast radius; removing the
+    /// risk needs the admin key in a multisig (see SECURITY.md §4).
+    pub fn set_twap_window(env: Env, caller: Address, window: u64) {
+        admin::set_twap_window(&env, &caller, window);
+    }
+
     // ----------------------------------------------------------------------
     // Administration (RBAC)
     // ----------------------------------------------------------------------
@@ -384,6 +401,29 @@ impl ApexFuturesContract {
 
     pub fn get_oracle_price(env: Env) -> i128 {
         oracle::get_price(&env)
+    }
+
+    /// The price the risk engine actually acts on: the TWAP when smoothing is
+    /// enabled, otherwise the latest index. Compare against `get_oracle_price`
+    /// to see how far a spike has been damped.
+    pub fn get_risk_price(env: Env) -> i128 {
+        oracle::risk_price(&env)
+    }
+
+    /// TWAP over an arbitrary trailing window, for charting and what-if queries.
+    /// Does not have to match the configured window.
+    pub fn get_twap(env: Env, window: u64) -> i128 {
+        oracle::twap(&env, window)
+    }
+
+    /// Configured TWAP window in seconds; `0` means smoothing is off.
+    pub fn get_twap_window(env: Env) -> u64 {
+        storage::get_twap_window(&env)
+    }
+
+    /// Retained index observations backing the TWAP (oldest first, max 24).
+    pub fn get_price_history(env: Env) -> Vec<PricePoint> {
+        storage::get_price_history(&env)
     }
 
     pub fn get_health_factor(env: Env, user: Address) -> i128 {

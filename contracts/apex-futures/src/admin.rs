@@ -96,6 +96,22 @@ pub fn set_oracle_updater(env: &Env, caller: &Address, updater: &Address) {
     events::config_updated(env, caller);
 }
 
+/// Upper bound on the TWAP window. A day of smoothing is already well past the
+/// point of usefulness; beyond it the risk price could drift so far from reality
+/// that genuinely insolvent positions would never become liquidatable.
+pub const MAX_TWAP_WINDOW: u64 = 86_400;
+
+/// Set the TWAP window (seconds) applied to the risk price. `0` disables it.
+pub fn set_twap_window(env: &Env, caller: &Address, window: u64) {
+    require_admin(env, caller);
+    if window > MAX_TWAP_WINDOW {
+        panic_with_error!(env, Error::InvalidParams);
+    }
+    storage::set_twap_window(env, window);
+    storage::extend_instance(env);
+    events::twap_window_set(env, caller, window);
+}
+
 // --- Parameter governance --------------------------------------------------
 
 /// Validate that a Config is internally consistent and within safe bounds.
