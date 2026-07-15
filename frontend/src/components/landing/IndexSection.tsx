@@ -7,6 +7,17 @@ import { fmtUsd, fmtPct, fmtCompact } from '../../lib/utils';
 
 const SUPPORTED = ['apex-index-H200', 'apex-index-B200', 'apex-index-GB200', 'apex-index-A100'];
 
+// Coefficients mirror the on-chain seed defaults in
+// contracts/apex-marketplace/src/normalization.rs (H100 baseline = 1.00).
+const COEFFICIENTS = [
+  { model: 'H100', coeff: '1.00' },
+  { model: 'H200', coeff: '1.40' },
+  { model: 'B200', coeff: '2.50' },
+  { model: 'GB200', coeff: '3.50' },
+  { model: 'A100', coeff: '0.60' },
+  { model: 'RTX4090', coeff: '0.35' },
+];
+
 export function IndexSection() {
   const { index, mark, premium, depth, live } = useIndex();
 
@@ -79,6 +90,39 @@ export function IndexSection() {
           oracle — the foundation for pricing, hedging, and settlement across the region&apos;s
           compute-derivatives market.
         </p>
+
+        {/* CU explainer — the differentiator: what the index actually prices. */}
+        <motion.div
+          initial={{ opacity: 0, y: 14 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true, margin: '-80px' }}
+          transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+          className="mt-16 overflow-hidden rounded-card border border-line"
+        >
+          <div className="border-b border-line bg-ink-800 px-5 py-3">
+            <span className="label">What is a CU?</span>
+          </div>
+          <div className="grid grid-cols-1 gap-8 bg-ink-900 px-5 py-8 md:grid-cols-[auto_1fr] md:items-center md:gap-12">
+            <div className="font-display text-2xl font-medium tracking-tight text-fg md:text-3xl">
+              1 CU = 1 H100-equivalent
+              <br />
+              GPU-hour <span className="text-fg-faint">(HEH)</span>
+            </div>
+            <p className="max-w-md text-sm leading-relaxed text-fg-muted">
+              Heterogeneous hardware normalized to an H100-SXM-80GB baseline via a
+              published, governance-managed coefficient table. The apex-index prices
+              1&nbsp;CU; the CU token delivers 1&nbsp;CU — same unit, two products.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3 border-t border-line bg-ink-800 px-5 py-4">
+            {COEFFICIENTS.map((c) => (
+              <div key={c.model} className="flex items-baseline gap-1.5">
+                <span className="font-mono text-xs text-fg-dim">{c.model}</span>
+                <span className="font-mono text-xs text-fg-faint">{c.coeff}×</span>
+              </div>
+            ))}
+          </div>
+        </motion.div>
       </div>
     </section>
   );
