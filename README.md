@@ -26,6 +26,20 @@ real-world index anchoring.
 
 ---
 
+## Live deployment (Testnet)
+
+**Live app:** <https://apex-on-stellar.vercel.app>
+
+Running on **Stellar Testnet** (explorer links open stellar.expert):
+
+| Contract | Address |
+|---|---|
+| `apex-futures` | [`CDVCBYSD3D2AMH3EDCSCUONVREWDWIOEDJFZSWKQIJNH52TP6S7VDKCC`](https://stellar.expert/explorer/testnet/contract/CDVCBYSD3D2AMH3EDCSCUONVREWDWIOEDJFZSWKQIJNH52TP6S7VDKCC) |
+| `apex-marketplace` | [`CDAM76V2FX7Y26UATDY2FL4CZ3RMYBNXHZQSQP6X6DRFLVQLQPCKNY2F`](https://stellar.expert/explorer/testnet/contract/CDAM76V2FX7Y26UATDY2FL4CZ3RMYBNXHZQSQP6X6DRFLVQLQPCKNY2F) |
+| USDC (SAC) | [`CBTXNIAJASVEWFR7QRYGQXIMBVC2GB4FXZEICUCXCRMCO6UM4K3RZEDL`](https://stellar.expert/explorer/testnet/contract/CBTXNIAJASVEWFR7QRYGQXIMBVC2GB4FXZEICUCXCRMCO6UM4K3RZEDL) |
+
+---
+
 ## Architecture
 
 ```
