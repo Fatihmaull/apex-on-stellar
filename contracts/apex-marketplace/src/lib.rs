@@ -225,6 +225,9 @@ impl ApexMarketplaceContract {
     pub fn create_index(env: Env, caller: Address, symbol: Symbol, nav_factor: i128) {
         index_pool::create_index(&env, &caller, symbol, nav_factor);
     }
+    pub fn set_index_nav_factor(env: Env, caller: Address, symbol: Symbol, nav_factor: i128) {
+        index_pool::set_index_nav_factor(&env, &caller, symbol, nav_factor);
+    }
     pub fn buy_index(env: Env, buyer: Address, symbol: Symbol, usdc_amount: i128) {
         index_pool::buy_index(&env, &buyer, symbol, usdc_amount);
     }

@@ -6,7 +6,7 @@ futures/index exchange. Written to be handed to a fresh agent — it assumes no
 prior chat context.
 
 **Status of what exists (do not rebuild):**
-- `contracts/apex-futures/` — vAMM futures + ACPI index, oracle (SEP-40 + TWAP),
+- `contracts/apex-futures/` — vAMM futures + apex-index index, oracle (SEP-40 + TWAP),
   RBAC, timelock governance, insurance fund, solvency invariant, 29 tests. **LIVE on
   testnet:** `CDVCBYSD3D2AMH3EDCSCUONVREWDWIOEDJFZSWKQIJNH52TP6S7VDKCC`.
 - `frontend/` — Next.js 14, ornn-style monochrome UI, multi-wallet (Stellar Wallets
@@ -59,7 +59,7 @@ Three tiers, mirroring equities:
 |------|---------|-----------|
 | Per-provider CU series | Individual stock (emiten) | Each verified provider issues a CU series backed by *their* verified capacity. Symbol e.g. `CU-<PROVIDER>`. |
 | Brand/type sub-index | Sector ETF | Composite of series filtered by GPU brand/type, e.g. `CUNVDA` (Nvidia providers), `CU-H100`. |
-| Broad index | IHSG / S&P | `CU-INDEX` — the whole verified market at H100-equiv spec. This is the ACPI, already live as a price; here it also becomes buyable. |
+| Broad index | IHSG / S&P | `CU-INDEX` — the whole verified market at H100-equiv spec. This is the apex-index, already live as a price; here it also becomes buyable. |
 
 **Recommended on-chain representation (MVP):** a single **multi-asset ledger
 contract** (ERC-1155-style) rather than deploying one SAC per provider (cheaper, no
@@ -72,10 +72,10 @@ N-deploys). One `series_id` per provider CU series; index shares are their own
 
 **Index mechanics (MVP = pooled NAV vault, ETF-like):**
 - `CU-INDEX` / `CUNVDA` are **basket vaults**. Buyers deposit USDC → receive index
-  shares priced at **NAV = composite CU price** (from the oracle/ACPI, weighted by
+  shares priced at **NAV = composite CU price** (from the oracle/apex-index, weighted by
   constituent series). Redeem shares → USDC at current NAV (cash-settle).
 - Composite price = capacity-weighted average of constituent series' reference prices
-  (oracle-published per series, defaulting to ACPI × series coefficient).
+  (oracle-published per series, defaulting to apex-index × series coefficient).
 - Sub-index (CUNVDA) = same vault contract, different constituent filter/weight set.
 
 **Per-provider spot mechanics (MVP):** provider lists CU at an ask price (or a simple
@@ -172,7 +172,7 @@ fn transfer(env, series: u64, from: Address, to: Address, amount: i128);
 ## 4. Redemption — cash-settle now, real-access boilerplate
 
 MVP redemption = **cash-settle**: `redeem_cu` burns CU and pays USDC at the oracle
-CU price (from `apex-futures` oracle / ACPI × coefficient), debited from the
+CU price (from `apex-futures` oracle / apex-index × coefficient), debited from the
 provider's collateral or the index pool. This is fully implementable now.
 
 **Boilerplate for real compute access (build the seam, mock the backend):**
@@ -241,7 +241,7 @@ frontend/src/app/
 1. Marketplace grid: cards per series (provider, GPU model, spec/SLA, ask, available CU),
    filter by brand/type. Buy/sell modal.
 2. Index pages: `CU-INDEX` (IHSG-equivalent) + `CUNVDA` sector — show NAV (live), buy
-   shares with USDC, redeem. Chart NAV vs ACPI.
+   shares with USDC, redeem. Chart NAV vs apex-index.
 3. Portfolio: CU holdings per series + index shares, redeem (cash-settle) + "redeem for
    compute (preview)".
 4. Keep Futures/Hedge tab (existing) for hedging the index.
@@ -278,7 +278,7 @@ builds. Each frontend phase: `tsc --noEmit` + `next build` green. One PR per pha
 
 ## 8. Integration with existing `apex-futures`
 
-- **Oracle/index reuse:** marketplace reads the ACPI price from the futures oracle
+- **Oracle/index reuse:** marketplace reads the apex-index price from the futures oracle
   (or a shared oracle) for CU pricing/NAV. Do NOT duplicate the oracle; either
   cross-call `apex-futures.get_oracle_price` or extract a shared oracle contract
   (decide in M2 — cross-call is simpler for MVP).

@@ -98,6 +98,11 @@ pub fn index_created(env: &Env, symbol: &Symbol) {
         .publish((symbol_short!("idx_new"),), symbol.clone());
 }
 
+pub fn index_updated(env: &Env, symbol: &Symbol, nav_factor: i128) {
+    env.events()
+        .publish((symbol_short!("idx_upd"),), (symbol.clone(), nav_factor));
+}
+
 pub fn index_bought(env: &Env, buyer: &Address, symbol: &Symbol, usdc: i128, shares: i128) {
     env.events().publish(
         (symbol_short!("idx_buy"), buyer.clone()),

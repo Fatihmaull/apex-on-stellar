@@ -5,12 +5,41 @@ live in the local Stellar CLI keystore (`~/.config/stellar/identity/*.toml`).
 
 ---
 
+## Upgrade log
+
+### 2026-07-15 · Futures → TWAP + SEP-40 build (timelocked upgrade)
+
+Upgraded the live futures contract **in place** (state preserved) to the current
+`main` build via the governance timelock. No redeploy — same contract id.
+
+| | |
+|---|---|
+| Contract | `CDVCBYSD3D2AMH3EDCSCUONVREWDWIOEDJFZSWKQIJNH52TP6S7VDKCC` |
+| New WASM hash | `8ff9ad5aa22c4a24a743adddeb2d5ec242912afde5a1e2bffa1f6722bcd7adbf` |
+| Flow | `propose_upgrade` (admin) → wait `timelock_delay` (300s) → `execute_upgrade` |
+| TWAP | activated: `set_twap_window(1800)` → 30-min smoothing on the risk price |
+
+Verified post-upgrade: state intact (oracle/mark 5.0, admin unchanged, not paused);
+new `get_risk_price` / `get_twap` / `get_twap_window` / SEP-40 `lastprice` live.
+Upgrade-safe because `Config` was unchanged and `TwapWindow`/`PriceHistory` are
+separate keys that default to off/empty (→ spot behaviour) for pre-upgrade state.
+
+> **Still pending (operator / coordinated):** the *marketplace* still reads
+> `get_oracle_price` (raw spot), not `get_risk_price` — routing TWAP into the
+> marketplace risk path needs a `settlement.rs` change + marketplace redeploy.
+> The `set_index_nav_factor` entrypoint (to tilt the Nvidia sub-index distinct
+> from the broad index) is in source but needs a marketplace redeploy to go live.
+> The SEP-40 asset symbol is still `symbol_short!("ACPI")` on-chain — rename to an
+> apex-index symbol requires another futures upgrade (bundle with the next one).
+
+---
+
 ## Testnet — 2026-07-14 · Marketplace (CU spot + index)
 
 | Contract | ID |
 |---|---|
 | **APEX Marketplace** | `CDAM76V2FX7Y26UATDY2FL4CZ3RMYBNXHZQSQP6X6DRFLVQLQPCKNY2F` |
-| APEX Futures (oracle / ACPI) | `CDVCBYSD3D2AMH3EDCSCUONVREWDWIOEDJFZSWKQIJNH52TP6S7VDKCC` |
+| APEX Futures (oracle / apex-index) | `CDVCBYSD3D2AMH3EDCSCUONVREWDWIOEDJFZSWKQIJNH52TP6S7VDKCC` |
 | Test USDC (SAC) | `CBTXNIAJASVEWFR7QRYGQXIMBVC2GB4FXZEICUCXCRMCO6UM4K3RZEDL` |
 
 - Contract: https://stellar.expert/explorer/testnet/contract/CDAM76V2FX7Y26UATDY2FL4CZ3RMYBNXHZQSQP6X6DRFLVQLQPCKNY2F

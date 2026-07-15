@@ -12,7 +12,7 @@ a one-line headline + the 2–4 supporting points to render.
 ### 1 — Title / Hook
 - **APEX — The foundation of the APAC compute market.**
 - Sub: Standardize, price, hedge, and tokenize GPU compute. Settled in USDC on Stellar.
-- Visual: the live ACPI index price ($/H100-hour), pulled on-chain.
+- Visual: the live apex-index index price ($/H100-hour), pulled on-chain.
 
 ### 2 — Problem
 - Compute is the most important commodity of our lifetimes — but in APAC it trades like oil did a century ago.
@@ -22,14 +22,14 @@ a one-line headline + the 2–4 supporting points to render.
 
 ### 3 — Solution
 - APEX is a **risk-management + price-discovery layer** for compute — not a data center.
-- Three layers: **(1) ACPI index** → **(2) Futures exchange (hedge/trade)** → **(3) Tokenized CU marketplace (spot capacity)**.
+- Three layers: **(1) apex-index index** → **(2) Futures exchange (hedge/trade)** → **(3) Tokenized CU marketplace (spot capacity)**.
 - All on-chain, cash-settled in USDC, built for APAC.
 
 ### 4 — What is a CU? (the differentiator)
 - **1 CU = 1 H100-equivalent GPU-hour (HEH)** — a standardized, verifiable, fungible unit of compute *delivery*.
 - Heterogeneous hardware normalized to an H100-SXM-80GB baseline via a published coefficient table (H200 ≈ 1.4, B200 ≈ 2.5, GB200 ≈ 3.5, A100 ≈ 0.6…).
 - Why GPU-hour (not FLOPs, not tokens): meterable, workload-agnostic (training *and* inference), and it's how the physical market already bills.
-- The **ACPI** prices 1 CU; the **CU token** delivers 1 CU. Same unit, two products.
+- The **apex-index** prices 1 CU; the **CU token** delivers 1 CU. Same unit, two products.
 
 ### 5 — How it works (two-sided market)
 - **Providers** (anyone with compute): register → due-diligence/KYB → post collateral → tokenize *verified* capacity as CU.
@@ -38,7 +38,7 @@ a one-line headline + the 2–4 supporting points to render.
 
 ### 6 — Live today (traction)
 - **Deployed on Stellar testnet** — real contract, real transactions.
-- Live ACPI index reading on-chain; vAMM futures (open/close/liquidate); USDC settlement; timelocked governance; solvency-by-construction (29 tests incl. fuzz).
+- Live apex-index index reading on-chain; vAMM futures (open/close/liquidate); USDC settlement; timelocked governance; solvency-by-construction (29 tests incl. fuzz).
 - First confirmed end-to-end browser trade.
 
 ### 7 — Technology

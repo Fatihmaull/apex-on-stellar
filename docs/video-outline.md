@@ -9,7 +9,7 @@ Tone: calm, confident, institutional. Let the product breathe (ornn-style).
 ---
 
 ### 0:00–0:12 · Hook (title card → live index)
-- On screen: black title → cut to the landing hero with the **live ACPI price ticking**.
+- On screen: black title → cut to the landing hero with the **live apex-index price ticking**.
 - VO: "Compute is the most important commodity of our lifetimes. In Asia-Pacific, nobody can price it. APEX changes that."
 
 ### 0:12–0:35 · Problem
@@ -17,7 +17,7 @@ Tone: calm, confident, institutional. Let the product breathe (ornn-style).
 - VO: "GPU rental rates across Singapore, Johor and Batam are quoted in private. Operators carry depreciation risk, AI labs carry cost risk — and neither can hedge. There's no benchmark, no derivatives, no liquidity."
 
 ### 0:35–0:55 · Solution + what is a CU
-- On screen: the ACPI index board (Index / Mark / Premium, live on-chain) + a simple CU explainer card.
+- On screen: the apex-index index board (Index / Mark / Premium, live on-chain) + a simple CU explainer card.
 - VO: "APEX standardizes compute into one unit — a CU: one H100-equivalent GPU-hour. We publish its price on-chain as the APAC Compute Price Index, and let anyone trade or hedge it."
 
 ### 0:55–1:15 · Role selection (live routes)
@@ -48,7 +48,7 @@ Tone: calm, confident, institutional. Let the product breathe (ornn-style).
 
 ## Production notes
 - **Must be real recordings:** the 1:40–2:30 trading segment and the live index (0:12, 0:35). Everything else can be hi-fi mockups clearly framed as "next".
-- Keep each on-screen number legible; the live ACPI price and a confirmed tx hash are the two credibility anchors.
+- Keep each on-screen number legible; the live apex-index price and a confirmed tx hash are the two credibility anchors.
 - Music: minimal, low. No hype cuts — the restraint *is* the brand.
 - Have a fallback screen recording of the trade in case live RPC is slow on demo day.
 - Captions on (accessibility + muted autoplay).

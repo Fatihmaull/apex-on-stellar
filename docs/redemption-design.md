@@ -31,7 +31,7 @@ payout_usdc = amount_cu × oracle_cu_price / SCALE
 ```
 
 - **Per-provider series:** prefer series reference price =
-  `ACPI × (series.coefficient / SCALE)` when no dedicated series mark exists
+  `apex-index × (series.coefficient / SCALE)` when no dedicated series mark exists
   (see [cu-spec.md](./cu-spec.md) §3).
 - **Oracle source (MVP):** cross-call `apex-futures` fresh / risk price — same
   staleness and deviation guards as futures risk paths. Do not accept stale

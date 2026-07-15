@@ -18,7 +18,7 @@ futures, spot marketplace, and redemption all price and settle in CU.
 |--------|---------|
 | **CU** | Compute Unit — the on-chain / product name |
 | **HEH** | H100-Equivalent Hour — the physical maturity unit |
-| **ACPI** | APAC Compute Price Index — oracle price of **1 CU** in USDC |
+| **apex-index** | APAC Compute Price Index — oracle price of **1 CU** in USDC |
 
 **Why GPU-hour (not FLOPs / tokens):** meterable, workload-agnostic (training and
 inference), and how the physical rental market already bills. Heterogeneous
@@ -51,7 +51,7 @@ All arithmetic uses checked mul/div; contract code must use the same
 - **One multi-asset ledger contract** holds all series balances — no N SAC
   deploys. Interface (`balance` / `mint` / `burn` / `transfer`) stays abstract so
   a future SAC-per-series path can replace the ledger without product changes.
-- **ACPI** today is a **price feed** (USDC per CU). In the marketplace, `CU-INDEX`
+- **apex-index** today is a **price feed** (USDC per CU). In the marketplace, `CU-INDEX`
   also becomes a **buyable** share at NAV derived from that price (§5).
 
 Capacity contribution formula (provider listing):
@@ -86,7 +86,7 @@ Stored **on-chain** in `normalization` storage, **governance-managed**
   use the live table or require a new series — contract policy: **new series only**
   after a coeff change for that model (simplest audit story).
 - Oracle / NAV default for a series without its own mark:
-  `series_ref_price = ACPI × (coeff_snapshot / SCALE)`.
+  `series_ref_price = apex-index × (coeff_snapshot / SCALE)`.
 
 ### 3.1 Methodology (off-chain; do not hardcode in contract)
 
@@ -168,9 +168,9 @@ calling `create_series`. Document any library used in `scripts/` when added.
 
 | Product | Unit | Price source (MVP) |
 |---------|------|--------------------|
-| Futures / ACPI board | 1 CU | `apex-futures` oracle (SEP-40 + TWAP risk price) |
+| Futures / apex-index board | 1 CU | `apex-futures` oracle (SEP-40 + TWAP risk price) |
 | Per-provider spot | 1 CU of series | Provider **fixed ask** (USDC/CU); escrow swap |
-| Cash redeem | 1 CU burned | Oracle CU price (ACPI × coeff for series path; ACPI for index) |
+| Cash redeem | 1 CU burned | Oracle CU price (apex-index × coeff for series path; apex-index for index) |
 | Index share | 1 share ≈ claim on NAV | Synthetic NAV ≈ capacity-weighted CU composite |
 
 **Open decisions locked for MVP** (see implementation plan §9):

@@ -29,7 +29,23 @@ pub fn create_index(env: &Env, caller: &Address, symbol: Symbol, nav_factor: i12
     events::index_created(env, &symbol);
 }
 
-/// NAV = ACPI × (nav_factor / SCALE). Synthetic cash vault — no CU custody.
+/// Update an existing index's NAV multiplier (admin-only). Lets a sub-index such
+/// as the Nvidia-tilted `apex-index-NVDA` be priced away from the broad index
+/// without recreating the pool or redeploying.
+pub fn set_index_nav_factor(env: &Env, caller: &Address, symbol: Symbol, nav_factor: i128) {
+    admin::require_admin(env, caller);
+    if nav_factor <= 0 {
+        panic_with_error!(env, Error::InvalidAmount);
+    }
+    let mut pool = storage::get_index(env, &symbol)
+        .unwrap_or_else(|| panic_with_error!(env, Error::IndexNotFound));
+    pool.nav_factor = nav_factor;
+    storage::set_index(env, &symbol, &pool);
+    storage::extend_instance(env);
+    events::index_updated(env, &symbol, nav_factor);
+}
+
+/// NAV = index price × (nav_factor / SCALE). Synthetic cash vault — no CU custody.
 pub fn get_index_nav(env: &Env, symbol: &Symbol) -> i128 {
     let pool = storage::get_index(env, symbol)
         .unwrap_or_else(|| panic_with_error!(env, Error::IndexNotFound));
